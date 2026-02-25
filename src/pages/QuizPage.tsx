@@ -4,12 +4,14 @@ import { supabase } from '../lib/supabase';
 import { shuffleArray } from '../lib/parser';
 import type { Question, QuizSet, QuizAnswer } from '../types';
 import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle } from 'lucide-react';
+import { useLang } from '../contexts/LangContext';
 
 const PRESET_COUNTS = [10, 30, 50, 100];
 
 export default function QuizPage() {
   const { setId } = useParams<{ setId: string }>();
   const navigate = useNavigate();
+  const { t } = useLang();
 
   const [quizSet, setQuizSet] = useState<QuizSet | null>(null);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
@@ -123,15 +125,14 @@ export default function QuizPage() {
   if (!quizSet || allQuestions.length === 0) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500 mb-4">문제를 찾을 수 없습니다</p>
+        <p className="text-gray-500 mb-4">{t('quiz_no_questions')}</p>
         <button onClick={() => navigate('/')} className="text-primary-600 font-medium hover:underline">
-          홈으로 돌아가기
+          {t('quiz_go_home_link')}
         </button>
       </div>
     );
   }
 
-  // Question count selection screen
   if (!quizStarted) {
     const total = allQuestions.length;
     const availableCounts = PRESET_COUNTS.filter(n => n < total);
@@ -143,7 +144,7 @@ export default function QuizPage() {
           className="text-gray-500 hover:text-gray-700 flex items-center gap-1 text-sm p-1 -ml-1 mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
-          돌아가기
+          {t('quiz_back')}
         </button>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-8 text-center">
@@ -155,10 +156,10 @@ export default function QuizPage() {
             <p className="text-gray-500 text-sm mb-2">{quizSet.description}</p>
           )}
           <p className="text-gray-400 text-sm mb-6 sm:mb-8">
-            총 <span className="font-semibold text-gray-600">{total}</span>문제
+            {t('quiz_total')} <span className="font-semibold text-gray-600">{total}</span>{t('quiz_total_suffix')}
           </p>
 
-          <p className="text-sm font-medium text-gray-700 mb-3 text-left">몇 문제를 풀까요?</p>
+          <p className="text-sm font-medium text-gray-700 mb-3 text-left">{t('quiz_how_many')}</p>
 
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4">
             {availableCounts.map(count => (
@@ -168,7 +169,7 @@ export default function QuizPage() {
                 className="flex flex-col items-center gap-1 py-4 sm:py-5 rounded-xl border-2 border-gray-200 hover:border-primary-400 hover:bg-primary-50/50 transition-all active:scale-[0.97]"
               >
                 <span className="text-2xl sm:text-3xl font-bold text-gray-900">{count}</span>
-                <span className="text-xs text-gray-500">문제</span>
+                <span className="text-xs text-gray-500">{t('quiz_questions')}</span>
               </button>
             ))}
           </div>
@@ -178,12 +179,12 @@ export default function QuizPage() {
             className="w-full flex items-center justify-center gap-2 py-4 sm:py-5 rounded-xl border-2 border-primary-500 bg-primary-50 hover:bg-primary-100 transition-all active:scale-[0.98]"
           >
             <Shuffle className="w-5 h-5 text-primary-600" />
-            <span className="font-bold text-primary-700 text-lg">전체 {total}문제</span>
+            <span className="font-bold text-primary-700 text-lg">{t('quiz_all')} {total}{t('quiz_total_suffix')}</span>
           </button>
 
           <p className="text-xs text-gray-400 mt-4 flex items-center justify-center gap-1">
             <Shuffle className="w-3.5 h-3.5" />
-            문제와 선택지 순서가 랜덤으로 섞입니다
+            {t('quiz_shuffle_note')}
           </p>
         </div>
       </div>
@@ -209,22 +210,24 @@ export default function QuizPage() {
               percent >= 80 ? 'text-success-500' : percent >= 60 ? 'text-warning-500' : 'text-danger-500'
             }`} />
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1.5">퀴즈 완료!</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1.5">{t('quiz_done')}</h2>
           <p className="text-gray-500 text-sm mb-3 sm:mb-4">{quizSet.title}</p>
           <div className="text-4xl sm:text-5xl font-bold mb-2" style={{
             color: percent >= 80 ? '#16a34a' : percent >= 60 ? '#f59e0b' : '#dc2626'
           }}>
             {percent}%
           </div>
-          <p className="text-gray-600 text-sm sm:text-base mb-1">{total}문제 중 {correct}개 정답</p>
+          <p className="text-gray-600 text-sm sm:text-base mb-1">
+            {total}{t('quiz_correct_of')} {correct}{t('quiz_correct_count')}
+          </p>
           <p className="text-xs sm:text-sm text-gray-400 flex items-center justify-center gap-1">
             <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            {minutes > 0 ? `${minutes}분 ` : ''}{seconds}초
+            {minutes > 0 ? `${minutes}m ` : ''}{seconds}s
           </p>
         </div>
 
         <div className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6">
-          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">문제 리뷰</h3>
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{t('quiz_review')}</h3>
           {answers.map((answer, i) => {
             const question = questions[i];
             return (
@@ -245,16 +248,16 @@ export default function QuizPage() {
                     {!answer.isCorrect && (
                       <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm space-y-0.5">
                         <p className="text-danger-600">
-                          내 답: {optLabels[answer.selectedIndex!]} - {question.options[answer.selectedIndex!]}
+                          {t('quiz_my_answer')}: {optLabels[answer.selectedIndex!]} - {question.options[answer.selectedIndex!]}
                         </p>
                         <p className="text-success-600">
-                          정답: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
+                          {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
                         </p>
                       </div>
                     )}
                     {answer.isCorrect && (
                       <p className="text-success-600 text-xs sm:text-sm mt-1">
-                        정답: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
+                        {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
                       </p>
                     )}
                   </div>
@@ -270,14 +273,14 @@ export default function QuizPage() {
             className="flex-1 flex items-center justify-center gap-2 bg-primary-600 text-white py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
           >
             <RotateCcw className="w-5 h-5" />
-            다시 풀기
+            {t('quiz_restart')}
           </button>
           <button
             onClick={() => navigate('/')}
             className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-700 py-3.5 sm:py-3 rounded-xl font-medium border border-gray-200 hover:bg-gray-50 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
           >
             <ArrowLeft className="w-5 h-5" />
-            홈으로
+            {t('quiz_go_home')}
           </button>
         </div>
       </div>
@@ -296,7 +299,7 @@ export default function QuizPage() {
           className="text-gray-500 hover:text-gray-700 flex items-center gap-1 text-sm p-1 -ml-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          나가기
+          {t('quiz_exit')}
         </button>
         <span className="text-sm font-medium text-gray-500 tabular-nums">
           {currentIndex + 1} / {questions.length}
@@ -382,7 +385,7 @@ export default function QuizPage() {
             disabled={selectedOption === null}
             className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg sm:shadow-sm active:scale-[0.98]"
           >
-            확인
+            {t('quiz_confirm')}
             <Check className="w-5 h-5" />
           </button>
         ) : (
@@ -390,7 +393,7 @@ export default function QuizPage() {
             onClick={handleNext}
             className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
           >
-            {currentIndex + 1 >= questions.length ? '결과 보기' : '다음'}
+            {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
             <ChevronRight className="w-5 h-5" />
           </button>
         )}

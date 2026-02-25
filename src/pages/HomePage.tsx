@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { QuizSet } from '../types';
 import { BookOpen, Play, Trash2, PlusCircle, Clock, BarChart3, Plus } from 'lucide-react';
+import { useLang } from '../contexts/LangContext';
 
 export default function HomePage() {
+  const { t } = useLang();
   const [quizSets, setQuizSets] = useState<QuizSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Record<string, { attempts: number; bestScore: number }>>({});
@@ -49,7 +51,7 @@ export default function HomePage() {
   }
 
   async function deleteQuizSet(id: string) {
-    if (!confirm('이 문제 세트를 삭제하시겠습니까?')) return;
+    if (!confirm(t('home_delete_confirm'))) return;
     await supabase.from('quiz_sets').delete().eq('id', id);
     setQuizSets(prev => prev.filter(s => s.id !== id));
   }
@@ -66,31 +68,29 @@ export default function HomePage() {
     <div className="pb-20 sm:pb-0">
       <div className="flex items-center justify-between mb-6 sm:mb-8">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">내 문제 세트</h1>
-          <p className="text-gray-500 text-sm mt-0.5">ChatGPT에서 가져온 문제로 반복 학습하세요</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('home_title')}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{t('home_subtitle')}</p>
         </div>
         <Link
           to="/import"
           className="hidden sm:flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-sm"
         >
           <PlusCircle className="w-5 h-5" />
-          문제 추가
+          {t('home_add')}
         </Link>
       </div>
 
       {quizSets.length === 0 ? (
         <div className="text-center py-16 sm:py-20 bg-white rounded-2xl border border-gray-200">
           <BookOpen className="w-14 h-14 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
-          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">아직 문제가 없습니다</h2>
-          <p className="text-gray-500 text-sm mb-6 px-4">
-            ChatGPT에서 객관식 문제를 복사해서 붙여넣기 하세요
-          </p>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">{t('home_empty_title')}</h2>
+          <p className="text-gray-500 text-sm mb-6 px-4">{t('home_empty_desc')}</p>
           <Link
             to="/import"
             className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors active:scale-[0.98]"
           >
             <PlusCircle className="w-5 h-5" />
-            첫 문제 세트 만들기
+            {t('home_empty_cta')}
           </Link>
         </div>
       ) : (
@@ -113,17 +113,17 @@ export default function HomePage() {
                     <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2.5 text-xs sm:text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        {set.question_count}문제
+                        {set.question_count}{t('home_questions')}
                       </span>
                       {stat && (
                         <>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            {stat.attempts}회 풀이
+                            {stat.attempts}{t('home_attempts')}
                           </span>
                           <span className="flex items-center gap-1">
                             <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            최고 {stat.bestScore}%
+                            {t('home_best')} {stat.bestScore}%
                           </span>
                         </>
                       )}
@@ -135,12 +135,12 @@ export default function HomePage() {
                       className="flex items-center gap-1.5 bg-primary-600 text-white px-3.5 sm:px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors active:scale-[0.97]"
                     >
                       <Play className="w-4 h-4" />
-                      풀기
+                      {t('home_start')}
                     </Link>
                     <Link
                       to={`/import/${set.id}`}
                       className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                      title="문제 추가"
+                      title={t('home_add')}
                     >
                       <Plus className="w-4 h-4" />
                     </Link>

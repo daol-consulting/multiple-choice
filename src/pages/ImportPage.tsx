@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { parseQuestions } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
 import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus } from 'lucide-react';
+import { useLang } from '../contexts/LangContext';
 
 const SAMPLE_TEXT = `1. What is the capital of France?
 A) London
@@ -32,6 +33,7 @@ export default function ImportPage() {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
   const isAddMode = !!setId;
+  const { t } = useLang();
 
   const [existingSet, setExistingSet] = useState<QuizSet | null>(null);
   const [title, setTitle] = useState('');
@@ -64,7 +66,7 @@ export default function ImportPage() {
 
   function handleParse() {
     if (!rawText.trim()) {
-      setError('문제 텍스트를 입력해주세요');
+      setError(t('import_err_empty'));
       setParseState('error');
       return;
     }
@@ -85,7 +87,7 @@ export default function ImportPage() {
       clearInterval(progressInterval);
 
       if (questions.length === 0) {
-        setError('파싱할 수 있는 문제를 찾지 못했습니다. 형식을 확인해주세요.');
+        setError(t('import_err_parse'));
         setParseState('error');
         setParseProgress(0);
         return;
@@ -100,11 +102,11 @@ export default function ImportPage() {
 
   async function handleSave() {
     if (!isAddMode && !title.trim()) {
-      setError('제목을 입력해주세요');
+      setError(t('import_err_title'));
       return;
     }
     if (parsed.length === 0) {
-      setError('저장할 문제가 없습니다');
+      setError(t('import_err_no_q'));
       return;
     }
 
@@ -121,7 +123,7 @@ export default function ImportPage() {
         .single();
 
       if (createErr || !quizSet) {
-        setError('문제 세트 생성 실패: ' + (createErr?.message || '알 수 없는 오류'));
+        setError(t('import_err_create') + (createErr?.message || 'Unknown error'));
         setSaving(false);
         return;
       }
@@ -139,7 +141,7 @@ export default function ImportPage() {
     const { error: qError } = await supabase.from('questions').insert(questions);
 
     if (qError) {
-      setError('문제 저장 실패: ' + qError.message);
+      setError(t('import_err_save') + qError.message);
       setSaving(false);
       return;
     }
@@ -152,12 +154,12 @@ export default function ImportPage() {
   return (
     <div className="pb-20 sm:pb-0">
       <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
-        {isAddMode ? '문제 추가하기' : '문제 가져오기'}
+        {isAddMode ? t('import_add_title') : t('import_title')}
       </h1>
       <p className="text-gray-500 text-sm sm:text-base mb-6">
         {isAddMode && existingSet
-          ? <><span className="font-medium text-primary-600">{existingSet.title}</span>에 문제를 추가합니다 (현재 {existingSet.question_count}문제)</>
-          : 'ChatGPT에서 생성한 객관식 문제를 붙여넣기 하세요'
+          ? <><span className="font-medium text-primary-600">{existingSet.title}</span>{t('import_add_subtitle_prefix')}{existingSet.question_count}{t('import_add_subtitle_suffix')}</>
+          : t('import_subtitle')
         }
       </p>
 
@@ -173,25 +175,25 @@ export default function ImportPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                제목 <span className="text-danger-500">*</span>
+                {t('import_label_title')} <span className="text-danger-500">*</span>
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="예: 컴퓨터네트워크 중간고사"
+                placeholder={t('import_placeholder_title')}
                 className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-base sm:text-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                설명 (선택)
+                {t('import_label_desc')}
               </label>
               <input
                 type="text"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                placeholder="예: Chapter 1~5 범위"
+                placeholder={t('import_placeholder_desc')}
                 className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-base sm:text-sm"
               />
             </div>
@@ -201,26 +203,26 @@ export default function ImportPage() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-sm font-medium text-gray-700">
-              문제 텍스트 <span className="text-danger-500">*</span>
+              {t('import_label_text')} <span className="text-danger-500">*</span>
             </label>
             <button
               onClick={() => setRawText(SAMPLE_TEXT)}
               className="text-xs text-primary-600 hover:text-primary-700 font-medium"
             >
-              예시 채우기
+              {t('import_fill_example')}
             </button>
           </div>
           <textarea
             value={rawText}
             onChange={e => { setRawText(e.target.value); setParseState('idle'); setParsed([]); }}
-            placeholder={`ChatGPT에서 복사한 문제를 여기에 붙여넣기 하세요...\n\n예시 형식:\n1. What is the capital of France?\nA) London\nB) Paris\nC) Berlin\nD) Madrid\nAnswer: B`}
+            placeholder={t('import_placeholder_text')}
             rows={10}
             className="w-full px-3.5 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all font-mono text-sm resize-y min-h-[200px]"
           />
           {rawText.trim() && (
             <p className="text-xs text-gray-400 mt-1.5">
               <FileText className="w-3.5 h-3.5 inline mr-1" />
-              {rawText.trim().split('\n').length}줄 입력됨
+              {rawText.trim().split('\n').length}{t('import_lines')}
             </p>
           )}
         </div>
@@ -229,7 +231,7 @@ export default function ImportPage() {
           <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
             <div className="flex items-center gap-3 mb-3">
               <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
-              <span className="text-sm font-medium text-gray-700">문제 분석 중...</span>
+              <span className="text-sm font-medium text-gray-700">{t('import_analyzing')}</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
               <div
@@ -237,7 +239,7 @@ export default function ImportPage() {
                 style={{ width: `${parseProgress}%` }}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-2">텍스트에서 문제, 선택지, 정답을 추출하고 있습니다</p>
+            <p className="text-xs text-gray-400 mt-2">{t('import_analyzing_desc')}</p>
           </div>
         )}
 
@@ -248,7 +250,7 @@ export default function ImportPage() {
             className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 sm:py-2.5 rounded-xl font-medium hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
           >
             <Eye className="w-5 h-5" />
-            미리보기
+            {t('import_preview')}
           </button>
         )}
 
@@ -259,18 +261,18 @@ export default function ImportPage() {
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-success-600">{parsed.length}개 문제 감지 완료!</p>
+                <p className="font-semibold text-success-600">{parsed.length}{t('import_detected')}</p>
                 <p className="text-xs text-success-600/70 mt-0.5">
                   {isAddMode && existingSet
-                    ? `${existingSet.title}에 추가됩니다`
-                    : '아래에서 파싱된 문제를 확인하세요'
+                    ? `${existingSet.title}${t('import_add_to')}`
+                    : t('import_detected_sub')
                   }
                 </p>
               </div>
             </div>
 
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-              미리보기
+              {t('import_preview')}
             </h2>
             <div className="space-y-3 max-h-[50vh] overflow-y-auto -mx-1 px-1">
               {parsed.map((q, i) => (
@@ -312,12 +314,12 @@ export default function ImportPage() {
                 {saving ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    저장 중...
+                    {t('import_saving')}
                   </>
                 ) : (
                   <>
                     {isAddMode ? <Plus className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
-                    {parsed.length}개 문제 {isAddMode ? '추가하기' : '저장하기'}
+                    {parsed.length}{isAddMode ? t('import_add_btn') : t('import_save')}
                   </>
                 )}
               </button>
@@ -325,7 +327,7 @@ export default function ImportPage() {
                 onClick={() => { setParseState('idle'); setParsed([]); }}
                 className="sm:flex-none flex items-center justify-center gap-2 text-gray-600 bg-gray-100 px-5 py-3 sm:py-2.5 rounded-xl font-medium hover:bg-gray-200 transition-colors active:scale-[0.98]"
               >
-                다시 입력
+                {t('import_retry')}
               </button>
             </div>
           </div>

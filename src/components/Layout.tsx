@@ -1,13 +1,15 @@
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Home, PlusCircle } from 'lucide-react';
+import { BookOpen, Home, PlusCircle, Globe } from 'lucide-react';
+import { useLang } from '../contexts/LangContext';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isQuizPage = location.pathname.startsWith('/quiz/');
+  const { lang, toggle, t } = useLang();
 
   const navItems = [
-    { to: '/', label: '홈', icon: Home },
-    { to: '/import', label: '문제 추가', icon: PlusCircle },
+    { to: '/', label: t('nav_home'), icon: Home },
+    { to: '/import', label: t('nav_import'), icon: PlusCircle },
   ];
 
   return (
@@ -18,25 +20,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
             QuizDrill
           </Link>
-          <nav className="hidden sm:flex gap-1">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.to;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggle}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+              title={lang === 'ko' ? 'Switch to English' : '한국어로 변경'}
+            >
+              <Globe className="w-4 h-4" />
+              {lang === 'ko' ? 'EN' : '한'}
+            </button>
+            <nav className="hidden sm:flex gap-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </header>
 
