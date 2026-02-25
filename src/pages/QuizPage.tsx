@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { shuffleArray } from '../lib/parser';
 import type { Question, QuizSet, QuizAnswer } from '../types';
-import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle } from 'lucide-react';
+import { isSubjective } from '../types';
+import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle, Eye } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 
 const PRESET_COUNTS = [10, 30, 50, 100];
@@ -26,6 +27,9 @@ export default function QuizPage() {
   const [shuffledOptions, setShuffledOptions] = useState<{ text: string; originalIndex: number }[]>([]);
   const startTimeRef = useRef(Date.now());
 
+  const [showSubjAnswer, setShowSubjAnswer] = useState(false);
+  const [subjNote, setSubjNote] = useState('');
+
   const loadQuiz = useCallback(async () => {
     if (!setId) return;
     setLoading(true);
@@ -47,8 +51,10 @@ export default function QuizPage() {
   useEffect(() => {
     if (questions.length > 0 && currentIndex < questions.length) {
       const q = questions[currentIndex];
-      const opts = q.options.map((text: string, i: number) => ({ text, originalIndex: i }));
-      setShuffledOptions(shuffleArray(opts));
+      if (!isSubjective(q)) {
+        const opts = q.options.map((text: string, i: number) => ({ text, originalIndex: i }));
+        setShuffledOptions(shuffleArray(opts));
+      }
     }
   }, [currentIndex, questions]);
 
@@ -80,6 +86,17 @@ export default function QuizPage() {
     }]);
   }
 
+  function handleSubjSelfGrade(correct: boolean) {
+    const question = questions[currentIndex];
+    setAnswered(true);
+    setAnswers(prev => [...prev, {
+      questionId: question.id,
+      selectedIndex: null,
+      correctIndex: -1,
+      isCorrect: correct,
+    }]);
+  }
+
   function handleNext() {
     if (currentIndex + 1 >= questions.length) {
       finishQuiz();
@@ -87,6 +104,8 @@ export default function QuizPage() {
       setCurrentIndex(prev => prev + 1);
       setSelectedOption(null);
       setAnswered(false);
+      setShowSubjAnswer(false);
+      setSubjNote('');
     }
   }
 
@@ -112,6 +131,8 @@ export default function QuizPage() {
     setAnswers([]);
     setFinished(false);
     setQuizStarted(false);
+    setShowSubjAnswer(false);
+    setSubjNote('');
   }
 
   if (loading) {
@@ -230,6 +251,8 @@ export default function QuizPage() {
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{t('quiz_review')}</h3>
           {answers.map((answer, i) => {
             const question = questions[i];
+            const subjective = isSubjective(question);
+
             return (
               <div key={i} className={`bg-white rounded-xl border p-3 sm:p-4 ${
                 answer.isCorrect ? 'border-success-500/30' : 'border-danger-500/30'
@@ -244,21 +267,35 @@ export default function QuizPage() {
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-xs sm:text-sm leading-relaxed">{question.question_text}</p>
-                    {!answer.isCorrect && (
-                      <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm space-y-0.5">
-                        <p className="text-danger-600">
-                          {t('quiz_my_answer')}: {optLabels[answer.selectedIndex!]} - {question.options[answer.selectedIndex!]}
-                        </p>
-                        <p className="text-success-600">
-                          {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
-                        </p>
+                    <pre className="font-sans font-medium text-gray-900 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">{question.question_text}</pre>
+                    {subjective ? (
+                      <div className="mt-1.5 sm:mt-2">
+                        {question.explanation && (
+                          <div className="text-xs sm:text-sm text-amber-700 bg-amber-50 rounded-lg p-2.5 mt-1">
+                            <span className="font-medium">{t('quiz_model_answer')}:</span>
+                            <pre className="font-sans whitespace-pre-wrap mt-1">{question.explanation}</pre>
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1 italic">{t('quiz_self_assessed')}</p>
                       </div>
-                    )}
-                    {answer.isCorrect && (
-                      <p className="text-success-600 text-xs sm:text-sm mt-1">
-                        {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
-                      </p>
+                    ) : (
+                      <>
+                        {!answer.isCorrect && (
+                          <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm space-y-0.5">
+                            <p className="text-danger-600">
+                              {t('quiz_my_answer')}: {optLabels[answer.selectedIndex!]} - {question.options[answer.selectedIndex!]}
+                            </p>
+                            <p className="text-success-600">
+                              {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
+                            </p>
+                          </div>
+                        )}
+                        {answer.isCorrect && (
+                          <p className="text-success-600 text-xs sm:text-sm mt-1">
+                            {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -288,6 +325,7 @@ export default function QuizPage() {
   }
 
   const question = questions[currentIndex];
+  const subjective = isSubjective(question);
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
   const progress = ((currentIndex) / questions.length) * 100;
 
@@ -313,91 +351,177 @@ export default function QuizPage() {
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 flex-1">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed">
-          {question.question_text}
-        </h2>
+      {subjective ? (
+        /* ---- SUBJECTIVE QUESTION ---- */
+        <>
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 flex-1">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                {t('import_type_subjective')}
+              </span>
+            </div>
 
-        <div className="space-y-2.5 sm:space-y-3">
-          {shuffledOptions.map((opt, i) => {
-            let style = 'border-gray-200 hover:border-primary-300 hover:bg-primary-50/50 active:bg-primary-50';
-            if (answered) {
-              if (opt.originalIndex === question.correct_index) {
-                style = 'border-success-500 bg-success-50 ring-2 ring-success-500/20';
-              } else if (i === selectedOption && opt.originalIndex !== question.correct_index) {
-                style = 'border-danger-500 bg-danger-50 ring-2 ring-danger-500/20';
-              } else {
-                style = 'border-gray-200 opacity-50';
-              }
-            } else if (i === selectedOption) {
-              style = 'border-primary-500 bg-primary-50 ring-2 ring-primary-500/20';
-            }
+            <pre className="font-sans text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed whitespace-pre-wrap">
+              {question.question_text}
+            </pre>
 
-            return (
-              <button
-                key={i}
-                onClick={() => handleSelect(i)}
-                disabled={answered}
-                className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all ${style}`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                    answered && opt.originalIndex === question.correct_index
-                      ? 'bg-success-500 text-white'
-                      : answered && i === selectedOption
-                      ? 'bg-danger-500 text-white'
-                      : i === selectedOption
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {answered && opt.originalIndex === question.correct_index ? (
-                      <Check className="w-4 h-4" />
-                    ) : answered && i === selectedOption ? (
-                      <X className="w-4 h-4" />
-                    ) : (
-                      optionLabels[i]
-                    )}
-                  </span>
-                  <span className={`text-sm sm:text-base leading-relaxed ${
-                    answered && opt.originalIndex === question.correct_index
-                      ? 'font-medium text-success-600'
-                      : 'text-gray-700'
-                  }`}>
-                    {opt.text}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+            {!showSubjAnswer && !answered && (
+              <div className="mb-4">
+                <label className="text-xs font-medium text-gray-400 mb-1.5 block">{t('quiz_your_note')}</label>
+                <textarea
+                  value={subjNote}
+                  onChange={e => setSubjNote(e.target.value)}
+                  placeholder={t('quiz_your_note_placeholder')}
+                  rows={4}
+                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
+                />
+              </div>
+            )}
 
-        {question.explanation && answered && (
-          <div className="mt-4 p-3 bg-primary-50 rounded-xl text-sm text-primary-800 leading-relaxed">
-            💡 {question.explanation}
+            {showSubjAnswer && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl animate-in fade-in">
+                <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  {t('quiz_model_answer')}
+                </p>
+                {question.explanation ? (
+                  <pre className="font-sans text-sm sm:text-base text-amber-900 leading-relaxed whitespace-pre-wrap">
+                    {question.explanation}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-amber-600 italic">{t('quiz_no_model')}</p>
+                )}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="sticky bottom-4 sm:relative sm:bottom-0 pb-2 sm:pb-0">
-        {!answered ? (
-          <button
-            onClick={handleConfirm}
-            disabled={selectedOption === null}
-            className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg sm:shadow-sm active:scale-[0.98]"
-          >
-            {t('quiz_confirm')}
-            <Check className="w-5 h-5" />
-          </button>
-        ) : (
-          <button
-            onClick={handleNext}
-            className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
-          >
-            {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+          <div className="sticky bottom-4 sm:relative sm:bottom-0 pb-2 sm:pb-0">
+            {!showSubjAnswer && !answered ? (
+              <button
+                onClick={() => setShowSubjAnswer(true)}
+                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-amber-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-amber-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+              >
+                <Eye className="w-5 h-5" />
+                {t('quiz_show_answer')}
+              </button>
+            ) : !answered ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleSubjSelfGrade(true)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-success-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-success-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                >
+                  <Check className="w-5 h-5" />
+                  {t('quiz_self_correct')}
+                </button>
+                <button
+                  onClick={() => handleSubjSelfGrade(false)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-danger-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-danger-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                >
+                  <X className="w-5 h-5" />
+                  {t('quiz_self_wrong')}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+              >
+                {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        /* ---- MC QUESTION ---- */
+        <>
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 flex-1">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed">
+              {question.question_text}
+            </h2>
+
+            <div className="space-y-2.5 sm:space-y-3">
+              {shuffledOptions.map((opt, i) => {
+                let style = 'border-gray-200 hover:border-primary-300 hover:bg-primary-50/50 active:bg-primary-50';
+                if (answered) {
+                  if (opt.originalIndex === question.correct_index) {
+                    style = 'border-success-500 bg-success-50 ring-2 ring-success-500/20';
+                  } else if (i === selectedOption && opt.originalIndex !== question.correct_index) {
+                    style = 'border-danger-500 bg-danger-50 ring-2 ring-danger-500/20';
+                  } else {
+                    style = 'border-gray-200 opacity-50';
+                  }
+                } else if (i === selectedOption) {
+                  style = 'border-primary-500 bg-primary-50 ring-2 ring-primary-500/20';
+                }
+
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleSelect(i)}
+                    disabled={answered}
+                    className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all ${style}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                        answered && opt.originalIndex === question.correct_index
+                          ? 'bg-success-500 text-white'
+                          : answered && i === selectedOption
+                          ? 'bg-danger-500 text-white'
+                          : i === selectedOption
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {answered && opt.originalIndex === question.correct_index ? (
+                          <Check className="w-4 h-4" />
+                        ) : answered && i === selectedOption ? (
+                          <X className="w-4 h-4" />
+                        ) : (
+                          optionLabels[i]
+                        )}
+                      </span>
+                      <span className={`text-sm sm:text-base leading-relaxed ${
+                        answered && opt.originalIndex === question.correct_index
+                          ? 'font-medium text-success-600'
+                          : 'text-gray-700'
+                      }`}>
+                        {opt.text}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {question.explanation && answered && (
+              <div className="mt-4 p-3 bg-primary-50 rounded-xl text-sm text-primary-800 leading-relaxed">
+                {question.explanation}
+              </div>
+            )}
+          </div>
+
+          <div className="sticky bottom-4 sm:relative sm:bottom-0 pb-2 sm:pb-0">
+            {!answered ? (
+              <button
+                onClick={handleConfirm}
+                disabled={selectedOption === null}
+                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg sm:shadow-sm active:scale-[0.98]"
+              >
+                {t('quiz_confirm')}
+                <Check className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+              >
+                {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

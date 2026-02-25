@@ -6,7 +6,7 @@ export function parseQuestions(text: string): ParsedQuestion[] {
   const questions: ParsedQuestion[] = [];
 
   for (const block of blocks) {
-    const parsed = parseSingleQuestion(block);
+    const parsed = parseMCQuestion(block) ?? parseSubjectiveQuestion(block);
     if (parsed) {
       questions.push(parsed);
     }
@@ -15,7 +15,7 @@ export function parseQuestions(text: string): ParsedQuestion[] {
   return questions;
 }
 
-const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)[).:\s-]\s*/;
+const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*[).:\s—\-–]/;
 
 function splitIntoQuestionBlocks(text: string): string[] {
   const lines = text.split('\n');
@@ -34,7 +34,6 @@ function splitIntoQuestionBlocks(text: string): string[] {
     blocks.push(current.join('\n'));
   }
 
-  // If only one block found, try splitting by double newlines
   if (blocks.length <= 1 && text.includes('\n\n')) {
     const altBlocks = text.split(/\n{2,}/).filter(b => b.trim().length > 0);
     if (altBlocks.length > 1) return altBlocks;
@@ -44,13 +43,22 @@ function splitIntoQuestionBlocks(text: string): string[] {
 }
 
 const OPTION_PATTERN = /^\s*\*{0,2}\(?([A-Ha-h])[).:\]\s]\)?\s*\*{0,2}\s*(.+)/;
+const ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct)\s*[:\s)]/i;
+const EXPLANATION_PATTERN = /^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]/i;
 
-function parseSingleQuestion(block: string): ParsedQuestion | null {
+function hasAnswerMarker(block: string): boolean {
+  return /(?:Answer|정답|답|답안|Correct)\s*[:\s)]*\s*\(?[A-Ha-h]\)?/i.test(block)
+    || /[✓✅]|\(correct\)|\(정답\)/i.test(block);
+}
+
+function parseMCQuestion(block: string): ParsedQuestion | null {
+  if (!hasAnswerMarker(block)) return null;
+
   const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length < 3) return null;
 
   let questionText = lines[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+[).:\s-]+\s*\*{0,2}\s*/, '')
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[).:\s—\-–]+\s*\*{0,2}\s*/, '')
     .replace(/\*{2}/g, '')
     .trim();
 
@@ -64,22 +72,21 @@ function parseSingleQuestion(block: string): ParsedQuestion | null {
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
-    if (/^(?:\*{0,2})(?:Answer|정답|답|답안|Correct)\s*[:\s)]/i.test(line)) {
+    if (ANSWER_PATTERN.test(line)) {
       answerLine = line;
       continue;
     }
 
-    if (/^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]/i.test(line)) {
-      explanationLine = lines.slice(i).join(' ')
+    if (EXPLANATION_PATTERN.test(line)) {
+      explanationLine = lines.slice(i).join('\n')
         .replace(/^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]\s*/i, '')
         .replace(/\*{2}/g, '')
         .trim();
       break;
     }
 
-    // Lines after the answer that aren't options are likely explanations
     if (answerLine && !OPTION_PATTERN.test(line)) {
-      explanationLine = lines.slice(i).join(' ').replace(/\*{2}/g, '').trim();
+      explanationLine = lines.slice(i).join('\n').replace(/\*{2}/g, '').trim();
       break;
     }
 
@@ -127,10 +134,37 @@ function parseSingleQuestion(block: string): ParsedQuestion | null {
   if (correctIndex === -1) correctIndex = 0;
 
   return {
+    type: 'mc',
     question_text: questionText,
     options,
     correct_index: correctIndex,
     explanation: explanationLine || undefined,
+  };
+}
+
+function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
+  const rawLines = block.split('\n');
+  const nonEmpty = rawLines.filter(l => l.trim().length > 0);
+  if (nonEmpty.length < 2) return null;
+
+  const titleLine = nonEmpty[0]
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[).:\s—\-–]+\s*\*{0,2}\s*/, '')
+    .replace(/\*{2}/g, '')
+    .trim();
+
+  if (!titleLine) return null;
+
+  const firstNewline = block.indexOf('\n');
+  if (firstNewline === -1) return null;
+
+  const body = block.slice(firstNewline + 1).replace(/^\n+/, '').replace(/\n+$/, '');
+
+  return {
+    type: 'subjective',
+    question_text: titleLine + '\n\n' + body,
+    options: [],
+    correct_index: -1,
+    explanation: undefined,
   };
 }
 

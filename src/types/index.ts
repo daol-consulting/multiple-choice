@@ -26,7 +26,10 @@ export interface QuizAttempt {
   created_at: string;
 }
 
+export type QuestionType = 'mc' | 'subjective';
+
 export interface ParsedQuestion {
+  type: QuestionType;
   question_text: string;
   options: string[];
   correct_index: number;
@@ -38,4 +41,8 @@ export interface QuizAnswer {
   selectedIndex: number | null;
   correctIndex: number;
   isCorrect: boolean;
+}
+
+export function isSubjective(q: Question | ParsedQuestion): boolean {
+  return q.options.length === 0 || q.correct_index === -1;
 }
