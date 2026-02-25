@@ -15,7 +15,7 @@ export function parseQuestions(text: string): ParsedQuestion[] {
   return questions;
 }
 
-const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*[).:\s—\-–]/;
+const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*[().:\s—\-–]/;
 
 function splitIntoQuestionBlocks(text: string): string[] {
   const lines = text.split('\n');
@@ -42,7 +42,19 @@ function splitIntoQuestionBlocks(text: string): string[] {
   return blocks.filter(b => b.trim().length > 0);
 }
 
-const OPTION_PATTERN = /^\s*\*{0,2}\(?([A-Ha-h])[).:\]\s]\)?\s*\*{0,2}\s*(.+)/;
+// Uppercase A-H: allow space as delimiter (A London, B Paris)
+const OPTION_UPPER = /^\s*\*{0,2}\(?([A-H])[).:\]\s]\)?\s*\*{0,2}\s*(.+)/;
+// Lowercase a-h: require punctuation delimiter only (a) text, b. text) — no bare space
+const OPTION_LOWER = /^\s*\*{0,2}\(?([a-h])[).:\]]\)?\s*\*{0,2}\s*(.+)/;
+
+function matchOption(line: string) {
+  return line.match(OPTION_UPPER) || line.match(OPTION_LOWER);
+}
+
+function isOptionLine(line: string) {
+  return OPTION_UPPER.test(line) || OPTION_LOWER.test(line);
+}
+
 const ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct)\s*[:\s)]/i;
 const EXPLANATION_PATTERN = /^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]/i;
 
@@ -58,7 +70,7 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   if (lines.length < 3) return null;
 
   let questionText = lines[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[).:\s—\-–]+\s*\*{0,2}\s*/, '')
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]+\s*\*{0,2}\s*/, '')
     .replace(/\*{2}/g, '')
     .trim();
 
@@ -68,12 +80,14 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   const optionLetters: string[] = [];
   let answerLine: string | null = null;
   let explanationLine: string | null = null;
+  let foundFirstOption = false;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
     if (ANSWER_PATTERN.test(line)) {
       answerLine = line;
+      foundFirstOption = true;
       continue;
     }
 
@@ -85,17 +99,20 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
       break;
     }
 
-    if (answerLine && !OPTION_PATTERN.test(line)) {
+    if (answerLine && !isOptionLine(line)) {
       explanationLine = lines.slice(i).join('\n').replace(/\*{2}/g, '').trim();
       break;
     }
 
-    const optMatch = line.match(OPTION_PATTERN);
+    const optMatch = matchOption(line);
     if (optMatch) {
+      foundFirstOption = true;
       const letter = optMatch[1].toUpperCase();
       const optText = optMatch[2].replace(/\*{2}/g, '').trim();
       optionLetters.push(letter);
       options.push(optText);
+    } else if (!foundFirstOption) {
+      questionText += '\n' + line;
     }
   }
 
@@ -150,7 +167,7 @@ function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
   if (nonEmpty.length < 2) return null;
 
   const titleLine = nonEmpty[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[).:\s—\-–]+\s*\*{0,2}\s*/, '')
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]+\s*\*{0,2}\s*/, '')
     .replace(/\*{2}/g, '')
     .trim();
 
@@ -209,4 +226,73 @@ export function shuffleArray<T>(array: T[]): T[] {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(normalizeText(text).split(' ').filter(w => w.length > 1));
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+export type DuplicateFlag = {
+  type: 'exact' | 'similar';
+  matchedWith: string;
+  source: 'batch' | 'existing';
+};
+
+export function detectDuplicates(
+  newQuestions: { question_text: string }[],
+  existingTexts: string[],
+): (DuplicateFlag | null)[] {
+  const results: (DuplicateFlag | null)[] = new Array(newQuestions.length).fill(null);
+
+  const newNormalized = newQuestions.map(q => normalizeText(q.question_text));
+  const newTokens = newQuestions.map(q => tokenize(q.question_text));
+  const existingNormalized = existingTexts.map(normalizeText);
+  const existingTokens = existingTexts.map(t => tokenize(t));
+
+  for (let i = 0; i < newQuestions.length; i++) {
+    for (let j = 0; j < existingNormalized.length; j++) {
+      if (newNormalized[i] === existingNormalized[j]) {
+        results[i] = { type: 'exact', matchedWith: existingTexts[j], source: 'existing' };
+        break;
+      }
+      const sim = jaccardSimilarity(newTokens[i], existingTokens[j]);
+      if (sim >= 0.7) {
+        results[i] = { type: 'similar', matchedWith: existingTexts[j], source: 'existing' };
+        break;
+      }
+    }
+    if (results[i]) continue;
+
+    for (let j = 0; j < i; j++) {
+      if (newNormalized[i] === newNormalized[j]) {
+        results[i] = { type: 'exact', matchedWith: `Q${j + 1}`, source: 'batch' };
+        break;
+      }
+      const sim = jaccardSimilarity(newTokens[i], newTokens[j]);
+      if (sim >= 0.7) {
+        results[i] = { type: 'similar', matchedWith: `Q${j + 1}`, source: 'batch' };
+        break;
+      }
+    }
+  }
+
+  return results;
 }

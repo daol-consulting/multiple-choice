@@ -67,13 +67,13 @@ export default function HomePage() {
   return (
     <div className="pb-20 sm:pb-0">
       <div className="flex items-center justify-between mb-6 sm:mb-8">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('home_title')}</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{t('home_subtitle')}</p>
+          <p className="text-gray-500 text-xs sm:text-sm mt-0.5">{t('home_subtitle')}</p>
         </div>
         <Link
           to="/import"
-          className="hidden sm:flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-sm"
+          className="hidden sm:flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-sm flex-shrink-0"
         >
           <PlusCircle className="w-5 h-5" />
           {t('home_add')}
@@ -100,57 +100,55 @@ export default function HomePage() {
             return (
               <div
                 key={set.id}
-                className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 hover:shadow-md transition-shadow active:bg-gray-50"
+                className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-base sm:text-lg text-gray-900 truncate">
-                      {set.title}
-                    </h3>
-                    {set.description && (
-                      <p className="text-gray-500 text-sm mt-0.5 line-clamp-1">{set.description}</p>
+                <div className="flex-1 min-w-0 mb-3">
+                  <h3 className="font-semibold text-base sm:text-lg text-gray-900 truncate">
+                    {set.title}
+                  </h3>
+                  {set.description && (
+                    <p className="text-gray-500 text-xs sm:text-sm mt-0.5 line-clamp-1">{set.description}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      {set.question_count}{t('home_questions')}
+                    </span>
+                    {stat && (
+                      <>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {stat.attempts}{t('home_attempts')}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <BarChart3 className="w-3.5 h-3.5" />
+                          {t('home_best')} {stat.bestScore}%
+                        </span>
+                      </>
                     )}
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2.5 text-xs sm:text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        {set.question_count}{t('home_questions')}
-                      </span>
-                      {stat && (
-                        <>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            {stat.attempts}{t('home_attempts')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            {t('home_best')} {stat.bestScore}%
-                          </span>
-                        </>
-                      )}
-                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                    <Link
-                      to={`/quiz/${set.id}`}
-                      className="flex items-center gap-1.5 bg-primary-600 text-white px-3.5 sm:px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors active:scale-[0.97]"
-                    >
-                      <Play className="w-4 h-4" />
-                      {t('home_start')}
-                    </Link>
-                    <Link
-                      to={`/import/${set.id}`}
-                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                      title={t('home_add')}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Link>
-                    <button
-                      onClick={() => deleteQuizSet(set.id)}
-                      className="p-2 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/quiz/${set.id}`}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-primary-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors active:scale-[0.97] min-h-[44px]"
+                  >
+                    <Play className="w-4 h-4" />
+                    {t('home_start')}
+                  </Link>
+                  <Link
+                    to={`/import/${set.id}`}
+                    className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-colors active:bg-primary-100"
+                    title={t('home_add')}
+                  >
+                    <Plus className="w-5 h-5" />
+                  </Link>
+                  <button
+                    onClick={() => deleteQuizSet(set.id)}
+                    className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-xl transition-colors active:bg-danger-100"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
             );

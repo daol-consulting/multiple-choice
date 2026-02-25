@@ -41,6 +41,8 @@ export interface QuizAnswer {
   selectedIndex: number | null;
   correctIndex: number;
   isCorrect: boolean;
+  skipped?: boolean;
+  userText?: string;
 }
 
 export function isSubjective(q: Question | ParsedQuestion): boolean {

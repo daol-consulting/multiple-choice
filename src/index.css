@@ -17,15 +17,43 @@
   --color-success-600: #16a34a;
 
   --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
   --color-danger-500: #ef4444;
   --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
 
   --color-warning-50: #fffbeb;
   --color-warning-500: #f59e0b;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   background-color: #f8fafc;
   color: #1e293b;
+  overflow-x: hidden;
+}
+
+pre {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+input, textarea, select {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input, textarea, select {
+    font-size: inherit;
+  }
+}
+
+@supports (height: 100dvh) {
+  .min-h-dvh { min-height: 100dvh; }
+  .h-dvh { height: 100dvh; }
 }

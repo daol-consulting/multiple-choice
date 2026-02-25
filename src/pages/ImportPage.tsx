@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { parseQuestions } from '../lib/parser';
+import { parseQuestions, detectDuplicates } from '../lib/parser';
+import type { DuplicateFlag } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
-import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, BookOpen } from 'lucide-react';
+import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, BookOpen, Copy, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 
 const SAMPLE_TEXT = `1. What is the capital of France?
@@ -36,10 +37,12 @@ export default function ImportPage() {
   const { t } = useLang();
 
   const [existingSet, setExistingSet] = useState<QuizSet | null>(null);
+  const [existingTexts, setExistingTexts] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedQuestion[]>([]);
+  const [dupFlags, setDupFlags] = useState<(DuplicateFlag | null)[]>([]);
   const [parseState, setParseState] = useState<ParseState>('idle');
   const [parseProgress, setParseProgress] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -53,6 +56,11 @@ export default function ImportPage() {
           setExistingSet(data);
           setTitle(data.title);
           setDescription(data.description || '');
+        }
+      });
+      supabase.from('questions').select('question_text').eq('quiz_set_id', setId).then(({ data }) => {
+        if (data) {
+          setExistingTexts(data.map(q => q.question_text));
         }
       });
     }
@@ -92,6 +100,9 @@ export default function ImportPage() {
         setParseProgress(0);
         return;
       }
+
+      const flags = detectDuplicates(questions, existingTexts);
+      setDupFlags(flags);
 
       setParseProgress(100);
       setParsed(questions);
@@ -149,7 +160,15 @@ export default function ImportPage() {
     navigate('/');
   }
 
+  function removeQuestion(index: number) {
+    const updated = parsed.filter((_, i) => i !== index);
+    setParsed(updated);
+    const newFlags = detectDuplicates(updated, existingTexts);
+    setDupFlags(newFlags);
+  }
+
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const dupCount = dupFlags.filter(f => f !== null).length;
 
   return (
     <div className="pb-20 sm:pb-0">
@@ -214,7 +233,7 @@ export default function ImportPage() {
           </div>
           <textarea
             value={rawText}
-            onChange={e => { setRawText(e.target.value); setParseState('idle'); setParsed([]); }}
+            onChange={e => { setRawText(e.target.value); setParseState('idle'); setParsed([]); setDupFlags([]); }}
             placeholder={t('import_placeholder_text')}
             rows={10}
             className="w-full px-3.5 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all font-mono text-sm resize-y min-h-[200px]"
@@ -271,47 +290,118 @@ export default function ImportPage() {
               </div>
             </div>
 
+            {dupCount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <p className="text-sm text-amber-700 font-medium">
+                  {dupCount}{t('import_dup_count')}
+                </p>
+              </div>
+            )}
+
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">
               {t('import_preview')}
             </h2>
-            <div className="space-y-3 max-h-[50vh] overflow-y-auto -mx-1 px-1">
-              {parsed.map((q, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-3.5 sm:p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-primary-600 font-bold text-sm sm:text-base">Q{i + 1}.</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                      q.type === 'subjective'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-primary-100 text-primary-700'
-                    }`}>
-                      {q.type === 'subjective' ? t('import_type_subjective') : t('import_type_mc')}
-                    </span>
-                  </div>
-                  <pre className="font-sans font-medium text-gray-900 mb-2 text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
-                    {q.question_text}
-                  </pre>
+            <div className="space-y-3 max-h-[60vh] sm:max-h-[50vh] overflow-y-auto -mx-1 px-1 overscroll-contain">
+              {parsed.map((q, i) => {
+                const dup = dupFlags[i];
 
-                  {q.type === 'mc' && (
-                    <>
-                      <div className="space-y-1 ml-2 sm:ml-4">
-                        {q.options.map((opt, j) => (
-                          <div
-                            key={j}
-                            className={`text-sm py-1.5 px-2.5 rounded-lg ${
-                              j === q.correct_index
-                                ? 'bg-success-50 text-success-600 font-medium'
-                                : 'text-gray-600'
-                            }`}
-                          >
-                            <span className="font-medium mr-1">{optionLabels[j]}.</span> {opt}
-                            {j === q.correct_index && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
-                          </div>
-                        ))}
+                return (
+                  <div
+                    key={i}
+                    className={`bg-white rounded-xl p-3.5 sm:p-4 border ${
+                      dup ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-primary-600 font-bold text-sm sm:text-base">Q{i + 1}.</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        q.type === 'subjective'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-primary-100 text-primary-700'
+                      }`}>
+                        {q.type === 'subjective' ? t('import_type_subjective') : t('import_type_mc')}
+                      </span>
+                      {dup && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5 ${
+                          dup.type === 'exact'
+                            ? 'bg-danger-100 text-danger-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {dup.type === 'exact' ? <Copy className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                          {dup.type === 'exact' ? t('import_dup_exact') : t('import_dup_similar')}
+                        </span>
+                      )}
+                      {dup && (
+                        <button
+                          onClick={() => removeQuestion(i)}
+                          className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-danger-100 hover:text-danger-600 transition-colors font-medium"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {dup && (
+                      <div className={`text-xs px-2.5 py-1.5 rounded-lg mb-2 ${
+                        dup.type === 'exact' ? 'bg-danger-50 text-danger-600' : 'bg-amber-50 text-amber-600'
+                      }`}>
+                        {dup.source === 'existing'
+                          ? <>
+                              {t('import_dup_existing')}:
+                              <span className="block mt-0.5 font-medium truncate">{dup.matchedWith.slice(0, 80)}{dup.matchedWith.length > 80 ? '...' : ''}</span>
+                            </>
+                          : <>{dup.matchedWith}{t('import_dup_batch')}</>
+                        }
                       </div>
+                    )}
+
+                    <pre className="font-sans font-medium text-gray-900 mb-2 text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
+                      {q.question_text}
+                    </pre>
+
+                    {q.type === 'mc' && (
+                      <>
+                        <div className="space-y-1 ml-2 sm:ml-4">
+                          {q.options.map((opt, j) => (
+                            <div
+                              key={j}
+                              className={`text-sm py-1.5 px-2.5 rounded-lg ${
+                                j === q.correct_index
+                                  ? 'bg-success-50 text-success-600 font-medium'
+                                  : 'text-gray-600'
+                              }`}
+                            >
+                              <span className="font-medium mr-1">{optionLabels[j]}.</span> {opt}
+                              {j === q.correct_index && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 ml-2 sm:ml-4">
+                          <div className="flex items-center gap-1 mb-1">
+                            <MessageSquarePlus className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs text-gray-400 font-medium">{t('import_explanation_label')}</span>
+                          </div>
+                          <textarea
+                            value={q.explanation || ''}
+                            onChange={e => {
+                              const updated = [...parsed];
+                              updated[i] = { ...updated[i], explanation: e.target.value || undefined };
+                              setParsed(updated);
+                            }}
+                            placeholder={t('import_explanation_placeholder')}
+                            rows={2}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {q.type === 'subjective' && (
                       <div className="mt-2 ml-2 sm:ml-4">
                         <div className="flex items-center gap-1 mb-1">
-                          <MessageSquarePlus className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-xs text-gray-400 font-medium">{t('import_explanation_label')}</span>
+                          <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="text-xs text-amber-600 font-medium">{t('import_model_answer_label')}</span>
                         </div>
                         <textarea
                           value={q.explanation || ''}
@@ -320,38 +410,18 @@ export default function ImportPage() {
                             updated[i] = { ...updated[i], explanation: e.target.value || undefined };
                             setParsed(updated);
                           }}
-                          placeholder={t('import_explanation_placeholder')}
-                          rows={2}
-                          className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
+                          placeholder={t('import_model_answer_placeholder')}
+                          rows={4}
+                          className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-amber-50/30 placeholder:text-gray-300"
                         />
                       </div>
-                    </>
-                  )}
-
-                  {q.type === 'subjective' && (
-                    <div className="mt-2 ml-2 sm:ml-4">
-                      <div className="flex items-center gap-1 mb-1">
-                        <BookOpen className="w-3.5 h-3.5 text-amber-500" />
-                        <span className="text-xs text-amber-600 font-medium">{t('import_model_answer_label')}</span>
-                      </div>
-                      <textarea
-                        value={q.explanation || ''}
-                        onChange={e => {
-                          const updated = [...parsed];
-                          updated[i] = { ...updated[i], explanation: e.target.value || undefined };
-                          setParsed(updated);
-                        }}
-                        placeholder={t('import_model_answer_placeholder')}
-                        rows={4}
-                        className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-amber-50/30 placeholder:text-gray-300"
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 sticky bottom-0 bg-[#f8fafc] py-3 -mx-4 px-4 sm:mx-0 sm:px-0 sm:relative sm:bg-transparent sm:py-0">
+            <div className="flex flex-col sm:flex-row gap-3 sticky bottom-0 bg-[#f8fafc] py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-3 -mx-4 px-4 sm:mx-0 sm:px-0 sm:relative sm:bg-transparent sm:py-0">
               <button
                 onClick={handleSave}
                 disabled={saving || (!isAddMode && !title.trim())}
@@ -370,7 +440,7 @@ export default function ImportPage() {
                 )}
               </button>
               <button
-                onClick={() => { setParseState('idle'); setParsed([]); }}
+                onClick={() => { setParseState('idle'); setParsed([]); setDupFlags([]); }}
                 className="sm:flex-none flex items-center justify-center gap-2 text-gray-600 bg-gray-100 px-5 py-3 sm:py-2.5 rounded-xl font-medium hover:bg-gray-200 transition-colors active:scale-[0.98]"
               >
                 {t('import_retry')}

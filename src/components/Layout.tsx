@@ -13,17 +13,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div className="min-h-screen min-h-dvh flex flex-col">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-3xl mx-auto px-4 h-14 sm:h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl text-primary-600">
-            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-            QuizDrill
+          <Link to="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl text-primary-600 min-w-0">
+            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+            <span className="truncate">QuizDrill</span>
           </Link>
           <div className="flex items-center gap-1">
             <button
               onClick={toggle}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors min-h-[44px] min-w-[44px] justify-center"
               title={lang === 'ko' ? 'Switch to English' : '한국어로 변경'}
             >
               <Globe className="w-4 h-4" />
@@ -65,7 +65,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+                  className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 min-h-[52px] justify-center text-xs font-medium transition-colors active:bg-gray-50 ${
                     isActive ? 'text-primary-600' : 'text-gray-400'
                   }`}
                 >

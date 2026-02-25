@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { shuffleArray } from '../lib/parser';
 import type { Question, QuizSet, QuizAnswer } from '../types';
 import { isSubjective } from '../types';
-import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle, Eye } from 'lucide-react';
+import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle, Eye, SkipForward, Minus, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 
 const PRESET_COUNTS = [10, 30, 50, 100];
@@ -17,6 +17,7 @@ export default function QuizPage() {
   const [quizSet, setQuizSet] = useState<QuizSet | null>(null);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [originalTotal, setOriginalTotal] = useState(0);
   const [quizStarted, setQuizStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -28,7 +29,8 @@ export default function QuizPage() {
   const startTimeRef = useRef(Date.now());
 
   const [showSubjAnswer, setShowSubjAnswer] = useState(false);
-  const [subjNote, setSubjNote] = useState('');
+  const [subjText, setSubjText] = useState('');
+  const [skippedOnce, setSkippedOnce] = useState<Set<string>>(new Set());
 
   const loadQuiz = useCallback(async () => {
     if (!setId) return;
@@ -62,6 +64,7 @@ export default function QuizPage() {
     const shuffled = shuffleArray([...allQuestions]);
     const selected = shuffled.slice(0, count);
     setQuestions(selected);
+    setOriginalTotal(selected.length);
     setQuizStarted(true);
     startTimeRef.current = Date.now();
   }
@@ -94,10 +97,33 @@ export default function QuizPage() {
       selectedIndex: null,
       correctIndex: -1,
       isCorrect: correct,
+      userText: subjText || undefined,
     }]);
   }
 
-  function handleNext() {
+  function handleSkip() {
+    const question = questions[currentIndex];
+
+    if (!skippedOnce.has(question.id)) {
+      setSkippedOnce(prev => new Set(prev).add(question.id));
+      setQuestions(prev => [...prev, question]);
+      setCurrentIndex(prev => prev + 1);
+      setSelectedOption(null);
+      setShowSubjAnswer(false);
+      setSubjText('');
+    } else {
+      setAnswered(true);
+      setAnswers(prev => [...prev, {
+        questionId: question.id,
+        selectedIndex: null,
+        correctIndex: question.correct_index,
+        isCorrect: false,
+        skipped: true,
+      }]);
+    }
+  }
+
+  function advanceToNext() {
     if (currentIndex + 1 >= questions.length) {
       finishQuiz();
     } else {
@@ -105,7 +131,7 @@ export default function QuizPage() {
       setSelectedOption(null);
       setAnswered(false);
       setShowSubjAnswer(false);
-      setSubjNote('');
+      setSubjText('');
     }
   }
 
@@ -118,7 +144,7 @@ export default function QuizPage() {
 
     await supabase.from('quiz_attempts').insert({
       quiz_set_id: setId,
-      total_questions: questions.length,
+      total_questions: originalTotal,
       correct_answers: correct,
       time_seconds: elapsed,
     });
@@ -132,7 +158,9 @@ export default function QuizPage() {
     setFinished(false);
     setQuizStarted(false);
     setShowSubjAnswer(false);
-    setSubjNote('');
+    setSubjText('');
+    setSkippedOnce(new Set());
+    setOriginalTotal(0);
   }
 
   if (loading) {
@@ -212,14 +240,26 @@ export default function QuizPage() {
     );
   }
 
+  /* ==================== RESULT SCREEN ==================== */
   if (finished) {
     const correct = answers.filter(a => a.isCorrect).length;
-    const total = answers.length;
+    const skippedCount = answers.filter(a => a.skipped).length;
+    const total = originalTotal;
     const percent = Math.round((correct / total) * 100);
     const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const optLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+    const answeredQuestionIds = new Set<string>();
+    const deduped: { answer: QuizAnswer; question: Question }[] = [];
+    for (const answer of answers) {
+      if (!answeredQuestionIds.has(answer.questionId)) {
+        answeredQuestionIds.add(answer.questionId);
+        const q = questions.find(qq => qq.id === answer.questionId);
+        if (q) deduped.push({ answer, question: q });
+      }
+    }
 
     return (
       <div className="max-w-2xl mx-auto">
@@ -240,6 +280,7 @@ export default function QuizPage() {
           </div>
           <p className="text-gray-600 text-sm sm:text-base mb-1">
             {total}{t('quiz_correct_of')} {correct}{t('quiz_correct_count')}
+            {skippedCount > 0 && <span className="text-gray-400 ml-1">({t('quiz_skip')} {skippedCount})</span>}
           </p>
           <p className="text-xs sm:text-sm text-gray-400 flex items-center justify-center gap-1">
             <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -249,38 +290,65 @@ export default function QuizPage() {
 
         <div className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6">
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{t('quiz_review')}</h3>
-          {answers.map((answer, i) => {
-            const question = questions[i];
+          {deduped.map(({ answer, question }, i) => {
             const subjective = isSubjective(question);
 
+            const borderColor = answer.skipped
+              ? 'border-gray-300'
+              : answer.isCorrect
+              ? 'border-success-500/30'
+              : 'border-danger-500/30';
+
             return (
-              <div key={i} className={`bg-white rounded-xl border p-3 sm:p-4 ${
-                answer.isCorrect ? 'border-success-500/30' : 'border-danger-500/30'
-              }`}>
+              <div key={i} className={`bg-white rounded-xl border p-3 sm:p-4 ${borderColor}`}>
                 <div className="flex items-start gap-2">
                   <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    answer.isCorrect ? 'bg-success-500' : 'bg-danger-500'
+                    answer.skipped
+                      ? 'bg-gray-400'
+                      : answer.isCorrect
+                      ? 'bg-success-500'
+                      : 'bg-danger-500'
                   }`}>
-                    {answer.isCorrect
+                    {answer.skipped
+                      ? <Minus className="w-3 h-3 text-white" />
+                      : answer.isCorrect
                       ? <Check className="w-3 h-3 text-white" />
                       : <X className="w-3 h-3 text-white" />
                     }
                   </div>
                   <div className="flex-1 min-w-0">
+                    {answer.skipped && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 mb-1 inline-block">
+                        {t('quiz_skipped')}
+                      </span>
+                    )}
                     <pre className="font-sans font-medium text-gray-900 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">{question.question_text}</pre>
+
                     {subjective ? (
                       <div className="mt-1.5 sm:mt-2">
+                        {answer.userText && (
+                          <div className="text-xs sm:text-sm text-gray-600 bg-gray-50 rounded-lg p-2.5 mb-1.5">
+                            <span className="font-medium text-gray-500">{t('quiz_write_answer')}:</span>
+                            <pre className="font-sans whitespace-pre-wrap mt-1">{answer.userText}</pre>
+                          </div>
+                        )}
                         {question.explanation && (
                           <div className="text-xs sm:text-sm text-amber-700 bg-amber-50 rounded-lg p-2.5 mt-1">
                             <span className="font-medium">{t('quiz_model_answer')}:</span>
                             <pre className="font-sans whitespace-pre-wrap mt-1">{question.explanation}</pre>
                           </div>
                         )}
-                        <p className="text-xs text-gray-400 mt-1 italic">{t('quiz_self_assessed')}</p>
+                        {!answer.skipped && (
+                          <p className="text-xs text-gray-400 mt-1 italic">{t('quiz_self_assessed')}</p>
+                        )}
                       </div>
                     ) : (
                       <>
-                        {!answer.isCorrect && (
+                        {answer.skipped ? (
+                          <p className="text-success-600 text-xs sm:text-sm mt-1">
+                            {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
+                          </p>
+                        ) : !answer.isCorrect ? (
                           <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm space-y-0.5">
                             <p className="text-danger-600">
                               {t('quiz_my_answer')}: {optLabels[answer.selectedIndex!]} - {question.options[answer.selectedIndex!]}
@@ -289,8 +357,7 @@ export default function QuizPage() {
                               {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
                             </p>
                           </div>
-                        )}
-                        {answer.isCorrect && (
+                        ) : (
                           <p className="text-success-600 text-xs sm:text-sm mt-1">
                             {t('quiz_correct_answer')}: {optLabels[answer.correctIndex]} - {question.options[answer.correctIndex]}
                           </p>
@@ -304,17 +371,17 @@ export default function QuizPage() {
           })}
         </div>
 
-        <div className="flex gap-3 sticky bottom-4 sm:relative sm:bottom-0">
+        <div className="flex gap-3 sticky bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-0 sm:relative pt-2 bg-gradient-to-t from-[#f8fafc] via-[#f8fafc] to-transparent -mx-4 px-4 sm:mx-0 sm:px-0 sm:bg-none">
           <button
             onClick={handleRestart}
-            className="flex-1 flex items-center justify-center gap-2 bg-primary-600 text-white py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+            className="flex-1 flex items-center justify-center gap-2 bg-primary-600 text-white py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
           >
             <RotateCcw className="w-5 h-5" />
             {t('quiz_restart')}
           </button>
           <button
             onClick={() => navigate('/')}
-            className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-700 py-3.5 sm:py-3 rounded-xl font-medium border border-gray-200 hover:bg-gray-50 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+            className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-700 py-3.5 sm:py-3 rounded-xl font-medium border border-gray-200 hover:bg-gray-50 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
           >
             <ArrowLeft className="w-5 h-5" />
             {t('quiz_go_home')}
@@ -324,13 +391,16 @@ export default function QuizPage() {
     );
   }
 
+  /* ==================== QUESTION SCREEN ==================== */
   const question = questions[currentIndex];
   const subjective = isSubjective(question);
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-  const progress = ((currentIndex) / questions.length) * 100;
+  const displayNum = Math.min(answers.length + 1, originalTotal);
+  const progress = (answers.length / originalTotal) * 100;
+  const wasSkippedBefore = skippedOnce.has(question.id);
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col min-h-[calc(100vh-4rem)]">
+    <div className="max-w-2xl mx-auto flex flex-col min-h-[calc(100dvh-3.5rem)] sm:min-h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <button
           onClick={() => navigate('/')}
@@ -340,7 +410,7 @@ export default function QuizPage() {
           {t('quiz_exit')}
         </button>
         <span className="text-sm font-medium text-gray-500 tabular-nums">
-          {currentIndex + 1} / {questions.length}
+          {displayNum} / {originalTotal}
         </span>
       </div>
 
@@ -350,6 +420,13 @@ export default function QuizPage() {
           style={{ width: `${progress}%` }}
         />
       </div>
+
+      {wasSkippedBefore && !answered && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2.5 rounded-xl mb-4 text-xs sm:text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>{t('quiz_skipped_once')}</span>
+        </div>
+      )}
 
       {subjective ? (
         /* ---- SUBJECTIVE QUESTION ---- */
@@ -365,21 +442,20 @@ export default function QuizPage() {
               {question.question_text}
             </pre>
 
-            {!showSubjAnswer && !answered && (
-              <div className="mb-4">
-                <label className="text-xs font-medium text-gray-400 mb-1.5 block">{t('quiz_your_note')}</label>
-                <textarea
-                  value={subjNote}
-                  onChange={e => setSubjNote(e.target.value)}
-                  placeholder={t('quiz_your_note_placeholder')}
-                  rows={4}
-                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
-                />
-              </div>
-            )}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">{t('quiz_write_answer')}</label>
+              <textarea
+                value={subjText}
+                onChange={e => setSubjText(e.target.value)}
+                placeholder={t('quiz_write_answer_placeholder')}
+                rows={5}
+                disabled={answered}
+                className="w-full px-3.5 py-3 rounded-xl border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300 disabled:opacity-60 disabled:bg-gray-100"
+              />
+            </div>
 
             {showSubjAnswer && (
-              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl animate-in fade-in">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                 <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5" />
                   {t('quiz_model_answer')}
@@ -395,27 +471,36 @@ export default function QuizPage() {
             )}
           </div>
 
-          <div className="sticky bottom-4 sm:relative sm:bottom-0 pb-2 sm:pb-0">
+          <div className="sticky bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-0 sm:relative pt-2 space-y-2.5 bg-gradient-to-t from-[#f8fafc] via-[#f8fafc] to-transparent -mx-4 px-4 sm:mx-0 sm:px-0 sm:bg-none">
             {!showSubjAnswer && !answered ? (
-              <button
-                onClick={() => setShowSubjAnswer(true)}
-                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-amber-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-amber-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
-              >
-                <Eye className="w-5 h-5" />
-                {t('quiz_show_answer')}
-              </button>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setShowSubjAnswer(true)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-amber-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
+                >
+                  <Eye className="w-5 h-5" />
+                  {t('quiz_show_answer')}
+                </button>
+                <button
+                  onClick={handleSkip}
+                  className="flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 px-4 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors active:scale-[0.98] min-h-[48px]"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  {t('quiz_skip')}
+                </button>
+              </div>
             ) : !answered ? (
-              <div className="flex gap-3">
+              <div className="flex gap-2.5">
                 <button
                   onClick={() => handleSubjSelfGrade(true)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-success-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-success-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                  className="flex-1 flex items-center justify-center gap-2 bg-success-500 text-white px-5 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-success-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
                 >
                   <Check className="w-5 h-5" />
                   {t('quiz_self_correct')}
                 </button>
                 <button
                   onClick={() => handleSubjSelfGrade(false)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-danger-500 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-danger-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                  className="flex-1 flex items-center justify-center gap-2 bg-danger-500 text-white px-5 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-danger-600 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
                 >
                   <X className="w-5 h-5" />
                   {t('quiz_self_wrong')}
@@ -423,8 +508,8 @@ export default function QuizPage() {
               </div>
             ) : (
               <button
-                onClick={handleNext}
-                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                onClick={advanceToNext}
+                className="w-full flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
               >
                 {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
                 <ChevronRight className="w-5 h-5" />
@@ -436,9 +521,9 @@ export default function QuizPage() {
         /* ---- MC QUESTION ---- */
         <>
           <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 flex-1">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed">
+            <pre className="font-sans text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed whitespace-pre-wrap">
               {question.question_text}
-            </h2>
+            </pre>
 
             <div className="space-y-2.5 sm:space-y-3">
               {shuffledOptions.map((opt, i) => {
@@ -500,20 +585,29 @@ export default function QuizPage() {
             )}
           </div>
 
-          <div className="sticky bottom-4 sm:relative sm:bottom-0 pb-2 sm:pb-0">
+          <div className="sticky bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-0 sm:relative pt-2 bg-gradient-to-t from-[#f8fafc] via-[#f8fafc] to-transparent -mx-4 px-4 sm:mx-0 sm:px-0 sm:bg-none">
             {!answered ? (
-              <button
-                onClick={handleConfirm}
-                disabled={selectedOption === null}
-                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg sm:shadow-sm active:scale-[0.98]"
-              >
-                {t('quiz_confirm')}
-                <Check className="w-5 h-5" />
-              </button>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={handleConfirm}
+                  disabled={selectedOption === null}
+                  className="flex-1 flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
+                >
+                  {t('quiz_confirm')}
+                  <Check className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleSkip}
+                  className="flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 px-4 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors active:scale-[0.98] min-h-[48px]"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  {t('quiz_skip')}
+                </button>
+              </div>
             ) : (
               <button
-                onClick={handleNext}
-                className="w-full sm:w-auto sm:ml-auto sm:flex flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98]"
+                onClick={advanceToNext}
+                className="w-full flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-3.5 sm:py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors shadow-lg sm:shadow-sm active:scale-[0.98] min-h-[48px]"
               >
                 {currentIndex + 1 >= questions.length ? t('quiz_view_result') : t('quiz_next')}
                 <ChevronRight className="w-5 h-5" />
