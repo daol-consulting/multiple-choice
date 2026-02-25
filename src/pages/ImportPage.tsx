@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { parseQuestions } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
-import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus } from 'lucide-react';
+import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 
 const SAMPLE_TEXT = `1. What is the capital of France?
@@ -296,11 +296,23 @@ export default function ImportPage() {
                       </div>
                     ))}
                   </div>
-                  {q.explanation && (
-                    <p className="text-xs text-gray-500 mt-2 ml-2 sm:ml-4 bg-gray-50 p-2 rounded-lg">
-                      💡 {q.explanation}
-                    </p>
-                  )}
+                  <div className="mt-2 ml-2 sm:ml-4">
+                    <div className="flex items-center gap-1 mb-1">
+                      <MessageSquarePlus className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-xs text-gray-400 font-medium">{t('import_explanation_label')}</span>
+                    </div>
+                    <textarea
+                      value={q.explanation || ''}
+                      onChange={e => {
+                        const updated = [...parsed];
+                        updated[i] = { ...updated[i], explanation: e.target.value || undefined };
+                        setParsed(updated);
+                      }}
+                      placeholder={t('import_explanation_placeholder')}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
+                    />
+                  </div>
                 </div>
               ))}
             </div>

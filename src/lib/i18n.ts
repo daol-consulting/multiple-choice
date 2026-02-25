@@ -42,6 +42,8 @@ const translations = {
   import_save: { ko: '개 문제 저장하기', en: ' questions — Save' },
   import_add_btn: { ko: '개 문제 추가하기', en: ' questions — Add' },
   import_retry: { ko: '다시 입력', en: 'Re-enter' },
+  import_explanation_placeholder: { ko: '해설을 입력하세요 (선택)', en: 'Add explanation (optional)' },
+  import_explanation_label: { ko: '해설', en: 'Explanation' },
   import_err_empty: { ko: '문제 텍스트를 입력해주세요', en: 'Please enter question text' },
   import_err_parse: { ko: '파싱할 수 있는 문제를 찾지 못했습니다. 형식을 확인해주세요.', en: 'No questions found. Please check the format.' },
   import_err_title: { ko: '제목을 입력해주세요', en: 'Please enter a title' },

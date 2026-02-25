@@ -69,11 +69,17 @@ function parseSingleQuestion(block: string): ParsedQuestion | null {
       continue;
     }
 
-    if (/^(?:\*{0,2})(?:Explanation|설명|해설|풀이)\s*[:\s)]/i.test(line)) {
+    if (/^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]/i.test(line)) {
       explanationLine = lines.slice(i).join(' ')
-        .replace(/^(?:\*{0,2})(?:Explanation|설명|해설|풀이)\s*[:\s)]\s*/i, '')
+        .replace(/^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]\s*/i, '')
         .replace(/\*{2}/g, '')
         .trim();
+      break;
+    }
+
+    // Lines after the answer that aren't options are likely explanations
+    if (answerLine && !OPTION_PATTERN.test(line)) {
+      explanationLine = lines.slice(i).join(' ').replace(/\*{2}/g, '').trim();
       break;
     }
 
