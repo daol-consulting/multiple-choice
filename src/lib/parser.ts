@@ -15,7 +15,7 @@ export function parseQuestions(text: string): ParsedQuestion[] {
   return questions;
 }
 
-const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*[().:\s—\-–]/;
+const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*(?:[().:\s—\-–]|$)/;
 
 function splitIntoQuestionBlocks(text: string): string[] {
   const lines = text.split('\n');
@@ -56,7 +56,7 @@ function isOptionLine(line: string) {
 }
 
 const ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct)\s*[:\s)]/i;
-const EXPLANATION_PATTERN = /^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Why|Hint|힌트)\s*[:\s)]/i;
+const EXPLANATION_PATTERN = /^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Hint|힌트)\s*[):]/i;
 
 function hasAnswerMarker(block: string): boolean {
   return /(?:Answer|정답|답|답안|Correct)\s*[:\s)]*\s*\(?[A-Ha-h]\)?/i.test(block)
@@ -70,11 +70,9 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   if (lines.length < 3) return null;
 
   let questionText = lines[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]+\s*\*{0,2}\s*/, '')
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]*\s*\*{0,2}\s*/, '')
     .replace(/\*{2}/g, '')
     .trim();
-
-  if (!questionText) return null;
 
   const options: string[] = [];
   const optionLetters: string[] = [];
@@ -105,18 +103,18 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
     }
 
     const optMatch = matchOption(line);
-    if (optMatch) {
+    if (optMatch && (questionText || foundFirstOption)) {
       foundFirstOption = true;
       const letter = optMatch[1].toUpperCase();
       const optText = optMatch[2].replace(/\*{2}/g, '').trim();
       optionLetters.push(letter);
       options.push(optText);
     } else if (!foundFirstOption) {
-      questionText += '\n' + line;
+      questionText = questionText ? questionText + '\n' + line : line;
     }
   }
 
-  if (options.length < 2) return null;
+  if (!questionText || options.length < 2) return null;
 
   let correctIndex = -1;
 
@@ -167,11 +165,9 @@ function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
   if (nonEmpty.length < 2) return null;
 
   const titleLine = nonEmpty[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]+\s*\*{0,2}\s*/, '')
+    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]*\s*\*{0,2}\s*/, '')
     .replace(/\*{2}/g, '')
     .trim();
-
-  if (!titleLine) return null;
 
   const firstNewline = block.indexOf('\n');
   if (firstNewline === -1) return null;
@@ -210,9 +206,15 @@ function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
 
   questionBody = questionBody.replace(/^\n+/, '').replace(/\n+$/, '');
 
+  const fullText = titleLine
+    ? (questionBody ? titleLine + '\n\n' + questionBody : titleLine)
+    : questionBody;
+
+  if (!fullText.trim()) return null;
+
   return {
     type: 'subjective',
-    question_text: titleLine + '\n\n' + questionBody,
+    question_text: fullText,
     options: [],
     correct_index: -1,
     explanation,
