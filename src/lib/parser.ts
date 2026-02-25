@@ -6,7 +6,7 @@ export function parseQuestions(text: string): ParsedQuestion[] {
   const questions: ParsedQuestion[] = [];
 
   for (const block of blocks) {
-    const parsed = parseMCQuestion(block) ?? parseSubjectiveQuestion(block);
+    const parsed = parseMCQuestion(block);
     if (parsed) {
       questions.push(parsed);
     }
@@ -16,6 +16,11 @@ export function parseQuestions(text: string): ParsedQuestion[] {
 }
 
 const QUESTION_START = /^\s*\*{0,2}(?:Q|q|문제\s*)?(\d+)\s*(?:[().:\s—\-–]|$)/;
+const QUESTION_LABEL = /^\s*(?:Question|문제)\s*:/i;
+
+function isBlockStart(line: string): boolean {
+  return QUESTION_START.test(line) || QUESTION_LABEL.test(line);
+}
 
 function splitIntoQuestionBlocks(text: string): string[] {
   const lines = text.split('\n');
@@ -23,7 +28,7 @@ function splitIntoQuestionBlocks(text: string): string[] {
   let current: string[] = [];
 
   for (const line of lines) {
-    if (QUESTION_START.test(line) && current.length > 0) {
+    if (isBlockStart(line) && current.length > 0) {
       blocks.push(current.join('\n'));
       current = [];
     }
@@ -57,6 +62,7 @@ function isOptionLine(line: string) {
 
 const ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct)\s*[:\s)]/i;
 const EXPLANATION_PATTERN = /^(?:\*{0,2})(?:Explanation|설명|해설|풀이|Reason|이유|Note|참고|Hint|힌트)\s*[):]/i;
+const CHOICES_LABEL = /^\s*(?:Choices|Options|선택지|보기)\s*:?\s*$/i;
 
 function hasAnswerMarker(block: string): boolean {
   return /(?:Answer|정답|답|답안|Correct)\s*[:\s)]*\s*\(?[A-Ha-h]\)?/i.test(block)
@@ -69,10 +75,16 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length < 3) return null;
 
-  let questionText = lines[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]*\s*\*{0,2}\s*/, '')
-    .replace(/\*{2}/g, '')
-    .trim();
+  const labelMatch = lines[0].match(/^\s*(?:Question|문제)\s*:\s*(.*)/i);
+  let questionText: string;
+  if (labelMatch) {
+    questionText = labelMatch[1].replace(/\*{2}/g, '').trim();
+  } else {
+    questionText = lines[0]
+      .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]*\s*\*{0,2}\s*/, '')
+      .replace(/\*{2}/g, '')
+      .trim();
+  }
 
   const options: string[] = [];
   const optionLetters: string[] = [];
@@ -82,6 +94,8 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
+
+    if (CHOICES_LABEL.test(line)) continue;
 
     if (ANSWER_PATTERN.test(line)) {
       answerLine = line;
@@ -157,69 +171,7 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   };
 }
 
-const SUBJ_ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct|해설|설명|풀이|Explanation)\s*[:\s)]/i;
-
-function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
-  const rawLines = block.split('\n');
-  const nonEmpty = rawLines.filter(l => l.trim().length > 0);
-  if (nonEmpty.length < 2) return null;
-
-  const titleLine = nonEmpty[0]
-    .replace(/^\s*\*{0,2}(?:Q|q|문제\s*)?\d+\s*[().:\s—\-–]*\s*\*{0,2}\s*/, '')
-    .replace(/\*{2}/g, '')
-    .trim();
-
-  const firstNewline = block.indexOf('\n');
-  if (firstNewline === -1) return null;
-
-  const bodyRaw = block.slice(firstNewline + 1);
-
-  let questionBody = '';
-  let explanation: string | undefined;
-
-  const bodyLines = bodyRaw.split('\n');
-  let answerStartIdx = -1;
-
-  for (let i = 0; i < bodyLines.length; i++) {
-    if (SUBJ_ANSWER_PATTERN.test(bodyLines[i].trim())) {
-      answerStartIdx = i;
-      break;
-    }
-  }
-
-  if (answerStartIdx !== -1) {
-    questionBody = bodyLines.slice(0, answerStartIdx).join('\n');
-
-    const answerRaw = bodyLines.slice(answerStartIdx).join('\n');
-    explanation = answerRaw
-      .replace(SUBJ_ANSWER_PATTERN, '')
-      .replace(/^\n+/, '')
-      .replace(/\n+$/, '')
-      .trim();
-
-    if (!explanation) {
-      explanation = bodyLines.slice(answerStartIdx + 1).join('\n').trim() || undefined;
-    }
-  } else {
-    questionBody = bodyRaw;
-  }
-
-  questionBody = questionBody.replace(/^\n+/, '').replace(/\n+$/, '');
-
-  const fullText = titleLine
-    ? (questionBody ? titleLine + '\n\n' + questionBody : titleLine)
-    : questionBody;
-
-  if (!fullText.trim()) return null;
-
-  return {
-    type: 'subjective',
-    question_text: fullText,
-    options: [],
-    correct_index: -1,
-    explanation,
-  };
-}
+/* subjective parsing disabled */
 
 export function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];

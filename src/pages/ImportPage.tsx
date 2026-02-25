@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { parseQuestions, detectDuplicates } from '../lib/parser';
 import type { DuplicateFlag } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
-import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, BookOpen, Copy, AlertTriangle } from 'lucide-react';
+import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, Copy, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import QuestionText from '../components/QuestionText';
 
@@ -316,12 +316,8 @@ export default function ImportPage() {
                   >
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-primary-600 font-bold text-sm sm:text-base">Q{i + 1}.</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                        q.type === 'subjective'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-primary-100 text-primary-700'
-                      }`}>
-                        {q.type === 'subjective' ? t('import_type_subjective') : t('import_type_mc')}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary-100 text-primary-700">
+                        {t('import_type_mc')}
                       </span>
                       {dup && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5 ${
@@ -359,62 +355,38 @@ export default function ImportPage() {
 
                     <QuestionText text={q.question_text} className="font-medium text-gray-900 mb-2 text-sm sm:text-base" />
 
-                    {q.type === 'mc' && (
-                      <>
-                        <div className="space-y-1 ml-2 sm:ml-4">
-                          {q.options.map((opt, j) => (
-                            <div
-                              key={j}
-                              className={`text-sm py-1.5 px-2.5 rounded-lg ${
-                                j === q.correct_index
-                                  ? 'bg-success-50 text-success-600 font-medium'
-                                  : 'text-gray-600'
-                              }`}
-                            >
-                              <span className="font-medium mr-1">{optionLabels[j]}.</span> {opt}
-                              {j === q.correct_index && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
-                            </div>
-                          ))}
+                    <div className="space-y-1 ml-2 sm:ml-4">
+                      {q.options.map((opt, j) => (
+                        <div
+                          key={j}
+                          className={`text-sm py-1.5 px-2.5 rounded-lg ${
+                            j === q.correct_index
+                              ? 'bg-success-50 text-success-600 font-medium'
+                              : 'text-gray-600'
+                          }`}
+                        >
+                          <span className="font-medium mr-1">{optionLabels[j]}.</span> {opt}
+                          {j === q.correct_index && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
                         </div>
-                        <div className="mt-2 ml-2 sm:ml-4">
-                          <div className="flex items-center gap-1 mb-1">
-                            <MessageSquarePlus className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-xs text-gray-400 font-medium">{t('import_explanation_label')}</span>
-                          </div>
-                          <textarea
-                            value={q.explanation || ''}
-                            onChange={e => {
-                              const updated = [...parsed];
-                              updated[i] = { ...updated[i], explanation: e.target.value || undefined };
-                              setParsed(updated);
-                            }}
-                            placeholder={t('import_explanation_placeholder')}
-                            rows={2}
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {q.type === 'subjective' && (
-                      <div className="mt-2 ml-2 sm:ml-4">
-                        <div className="flex items-center gap-1 mb-1">
-                          <BookOpen className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-xs text-amber-600 font-medium">{t('import_model_answer_label')}</span>
-                        </div>
-                        <textarea
-                          value={q.explanation || ''}
-                          onChange={e => {
-                            const updated = [...parsed];
-                            updated[i] = { ...updated[i], explanation: e.target.value || undefined };
-                            setParsed(updated);
-                          }}
-                          placeholder={t('import_model_answer_placeholder')}
-                          rows={4}
-                          className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-amber-50/30 placeholder:text-gray-300"
-                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 ml-2 sm:ml-4">
+                      <div className="flex items-center gap-1 mb-1">
+                        <MessageSquarePlus className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs text-gray-400 font-medium">{t('import_explanation_label')}</span>
                       </div>
-                    )}
+                      <textarea
+                        value={q.explanation || ''}
+                        onChange={e => {
+                          const updated = [...parsed];
+                          updated[i] = { ...updated[i], explanation: e.target.value || undefined };
+                          setParsed(updated);
+                        }}
+                        placeholder={t('import_explanation_placeholder')}
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-400/20 outline-none text-xs sm:text-sm text-gray-700 resize-y bg-gray-50/50 placeholder:text-gray-300"
+                      />
+                    </div>
                   </div>
                 );
               })}
