@@ -6,6 +6,7 @@ import type { Question, QuizSet, QuizAnswer } from '../types';
 import { isSubjective } from '../types';
 import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle, Eye, SkipForward, Minus, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
+import QuestionText from '../components/QuestionText';
 
 const PRESET_COUNTS = [10, 30, 50, 100];
 
@@ -322,7 +323,7 @@ export default function QuizPage() {
                         {t('quiz_skipped')}
                       </span>
                     )}
-                    <pre className="font-sans font-medium text-gray-900 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">{question.question_text}</pre>
+                    <QuestionText text={question.question_text} className="font-medium text-gray-900 text-xs sm:text-sm" />
 
                     {subjective ? (
                       <div className="mt-1.5 sm:mt-2">
@@ -438,9 +439,7 @@ export default function QuizPage() {
               </span>
             </div>
 
-            <pre className="font-sans text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed whitespace-pre-wrap">
-              {question.question_text}
-            </pre>
+            <QuestionText text={question.question_text} className="text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6" />
 
             <div className="mb-4">
               <label className="text-xs font-medium text-gray-500 mb-1.5 block">{t('quiz_write_answer')}</label>
@@ -521,9 +520,7 @@ export default function QuizPage() {
         /* ---- MC QUESTION ---- */
         <>
           <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 flex-1">
-            <pre className="font-sans text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6 leading-relaxed whitespace-pre-wrap">
-              {question.question_text}
-            </pre>
+            <QuestionText text={question.question_text} className="text-base sm:text-lg font-semibold text-gray-900 mb-5 sm:mb-6" />
 
             <div className="space-y-2.5 sm:space-y-3">
               {shuffledOptions.map((opt, i) => {

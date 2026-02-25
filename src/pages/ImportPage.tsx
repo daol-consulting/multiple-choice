@@ -6,6 +6,7 @@ import type { DuplicateFlag } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
 import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, BookOpen, Copy, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
+import QuestionText from '../components/QuestionText';
 
 const SAMPLE_TEXT = `1. What is the capital of France?
 A) London
@@ -356,9 +357,7 @@ export default function ImportPage() {
                       </div>
                     )}
 
-                    <pre className="font-sans font-medium text-gray-900 mb-2 text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
-                      {q.question_text}
-                    </pre>
+                    <QuestionText text={q.question_text} className="font-medium text-gray-900 mb-2 text-sm sm:text-base" />
 
                     {q.type === 'mc' && (
                       <>
