@@ -142,6 +142,8 @@ function parseMCQuestion(block: string): ParsedQuestion | null {
   };
 }
 
+const SUBJ_ANSWER_PATTERN = /^(?:\*{0,2})(?:Answer|정답|답|답안|Correct|해설|설명|풀이|Explanation)\s*[:\s)]/i;
+
 function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
   const rawLines = block.split('\n');
   const nonEmpty = rawLines.filter(l => l.trim().length > 0);
@@ -157,14 +159,46 @@ function parseSubjectiveQuestion(block: string): ParsedQuestion | null {
   const firstNewline = block.indexOf('\n');
   if (firstNewline === -1) return null;
 
-  const body = block.slice(firstNewline + 1).replace(/^\n+/, '').replace(/\n+$/, '');
+  const bodyRaw = block.slice(firstNewline + 1);
+
+  let questionBody = '';
+  let explanation: string | undefined;
+
+  const bodyLines = bodyRaw.split('\n');
+  let answerStartIdx = -1;
+
+  for (let i = 0; i < bodyLines.length; i++) {
+    if (SUBJ_ANSWER_PATTERN.test(bodyLines[i].trim())) {
+      answerStartIdx = i;
+      break;
+    }
+  }
+
+  if (answerStartIdx !== -1) {
+    questionBody = bodyLines.slice(0, answerStartIdx).join('\n');
+
+    const answerRaw = bodyLines.slice(answerStartIdx).join('\n');
+    explanation = answerRaw
+      .replace(SUBJ_ANSWER_PATTERN, '')
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '')
+      .trim();
+
+    if (!explanation) {
+      explanation = bodyLines.slice(answerStartIdx + 1).join('\n').trim() || undefined;
+    }
+  } else {
+    questionBody = bodyRaw;
+  }
+
+  questionBody = questionBody.replace(/^\n+/, '').replace(/\n+$/, '');
 
   return {
     type: 'subjective',
-    question_text: titleLine + '\n\n' + body,
+    question_text: titleLine + '\n\n' + questionBody,
     options: [],
     correct_index: -1,
-    explanation: undefined,
+    explanation,
   };
 }
 
