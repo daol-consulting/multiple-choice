@@ -16,9 +16,14 @@ async function readJson(pathname, fallback) {
 
   try {
     const result = await get(pathname, { access: 'public' });
-    if (!result || !result.url) return fallback;
+    if (!result || !result.url) {
+      // Blob에 문서가 없거나 접근 불가하면 로컬 백업 스토어를 우선 확인한다.
+      return readLocalJson(pathname, fallback);
+    }
     const response = await fetch(result.url);
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+      return readLocalJson(pathname, fallback);
+    }
     return response.json();
   } catch (error) {
     console.warn('[blob-store] read failed, falling back to local store:', error);
