@@ -15,7 +15,7 @@ async function readJson(pathname, fallback) {
   if (USE_LOCAL_STORE) return readLocalJson(pathname, fallback);
 
   try {
-    const result = await get(pathname, { access: 'public' });
+    const result = await get(pathname);
     if (!result || !result.url) {
       // Blob에 문서가 없거나 접근 불가하면 로컬 백업 스토어를 우선 확인한다.
       return readLocalJson(pathname, fallback);
@@ -36,7 +36,6 @@ async function writeJson(pathname, value) {
 
   try {
     await put(pathname, JSON.stringify(value), {
-      access: 'public',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/json; charset=utf-8',

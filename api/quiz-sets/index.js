@@ -5,6 +5,18 @@ import {
   saveSetDocument,
 } from '../_lib/blob-store.js';
 
+function parseBody(body) {
+  if (!body) return {};
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
@@ -16,7 +28,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { title, description } = req.body || {};
+      const { title, description } = parseBody(req.body);
       if (!title || !title.trim()) {
         return res.status(400).json({ error: 'Title is required.' });
       }

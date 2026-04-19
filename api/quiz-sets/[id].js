@@ -6,6 +6,18 @@ import {
   saveSetDocument,
 } from '../_lib/blob-store.js';
 
+function parseBody(body) {
+  if (!body) return {};
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
+}
+
 function normalizeQuestion(raw, setId) {
   return {
     id: crypto.randomUUID(),
@@ -42,7 +54,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { questions, attempt } = req.body || {};
+      const { questions, attempt } = parseBody(req.body);
       const doc = await getSetDocument(setId);
       const now = new Date().toISOString();
 
