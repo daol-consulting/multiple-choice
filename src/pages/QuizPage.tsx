@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import { shuffleArray } from '../lib/parser';
 import type { Question, QuizSet, QuizAnswer } from '../types';
 import { ChevronRight, Check, X, RotateCcw, Trophy, ArrowLeft, Clock, BookOpen, Shuffle, SkipForward, Minus, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import QuestionText from '../components/QuestionText';
+import { getQuizSetDoc, saveAttempt } from '../lib/blobApi';
 
 const PRESET_COUNTS = [10, 30, 50, 100];
 
@@ -33,14 +33,13 @@ export default function QuizPage() {
   const loadQuiz = useCallback(async () => {
     if (!setId) return;
     setLoading(true);
-
-    const [setRes, qRes] = await Promise.all([
-      supabase.from('quiz_sets').select('*').eq('id', setId).single(),
-      supabase.from('questions').select('*').eq('quiz_set_id', setId),
-    ]);
-
-    if (setRes.data) setQuizSet(setRes.data);
-    if (qRes.data) setAllQuestions(qRes.data);
+    try {
+      const doc = await getQuizSetDoc(setId);
+      if (doc.quizSet) setQuizSet(doc.quizSet);
+      if (doc.questions) setAllQuestions(doc.questions);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   }, [setId]);
 
@@ -122,12 +121,13 @@ export default function QuizPage() {
     const correct = finalAnswers.filter(a => a.isCorrect).length;
     const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000);
 
-    await supabase.from('quiz_attempts').insert({
-      quiz_set_id: setId,
-      total_questions: originalTotal,
-      correct_answers: correct,
-      time_seconds: elapsed,
-    });
+    if (setId) {
+      await saveAttempt(setId, {
+        total_questions: originalTotal,
+        correct_answers: correct,
+        time_seconds: elapsed,
+      });
+    }
   }
 
   function handleRestart() {

@@ -3,6 +3,8 @@ export interface QuizSet {
   title: string;
   description: string | null;
   question_count: number;
+  attempt_count?: number;
+  best_score?: number;
   created_at: string;
   updated_at: string;
 }

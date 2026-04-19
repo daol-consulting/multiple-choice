@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import type { QuizSet } from '../types';
 import { BookOpen, Play, Trash2, PlusCircle, Clock, BarChart3, Plus } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
+import { deleteQuizSet as deleteQuizSetApi, listQuizSets } from '../lib/blobApi';
 
 export default function HomePage() {
   const { t } = useLang();
   const [quizSets, setQuizSets] = useState<QuizSet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<Record<string, { attempts: number; bestScore: number }>>({});
 
   useEffect(() => {
     loadQuizSets();
@@ -17,42 +16,18 @@ export default function HomePage() {
 
   async function loadQuizSets() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('quiz_sets')
-      .select('*')
-      .order('updated_at', { ascending: false });
-
-    if (!error && data) {
+    try {
+      const data = await listQuizSets();
       setQuizSets(data);
-      await loadStats(data.map(s => s.id));
+    } catch (e) {
+      console.error(e);
     }
     setLoading(false);
   }
 
-  async function loadStats(setIds: string[]) {
-    if (setIds.length === 0) return;
-    const { data } = await supabase
-      .from('quiz_attempts')
-      .select('*')
-      .in('quiz_set_id', setIds);
-
-    if (data) {
-      const map: Record<string, { attempts: number; bestScore: number }> = {};
-      for (const attempt of data) {
-        const score = Math.round((attempt.correct_answers / attempt.total_questions) * 100);
-        if (!map[attempt.quiz_set_id]) {
-          map[attempt.quiz_set_id] = { attempts: 0, bestScore: 0 };
-        }
-        map[attempt.quiz_set_id].attempts++;
-        map[attempt.quiz_set_id].bestScore = Math.max(map[attempt.quiz_set_id].bestScore, score);
-      }
-      setStats(map);
-    }
-  }
-
   async function deleteQuizSet(id: string) {
     if (!confirm(t('home_delete_confirm'))) return;
-    await supabase.from('quiz_sets').delete().eq('id', id);
+    await deleteQuizSetApi(id);
     setQuizSets(prev => prev.filter(s => s.id !== id));
   }
 
@@ -96,7 +71,10 @@ export default function HomePage() {
       ) : (
         <div className="grid gap-3 sm:gap-4">
           {quizSets.map((set) => {
-            const stat = stats[set.id];
+            const stat = {
+              attempts: set.attempt_count || 0,
+              bestScore: set.best_score || 0,
+            };
             return (
               <div
                 key={set.id}
@@ -114,7 +92,7 @@ export default function HomePage() {
                       <BookOpen className="w-3.5 h-3.5" />
                       {set.question_count}{t('home_questions')}
                     </span>
-                    {stat && (
+                    {stat.attempts > 0 && (
                       <>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />

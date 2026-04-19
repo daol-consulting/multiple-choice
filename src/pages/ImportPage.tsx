@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import { parseQuestions, detectDuplicates } from '../lib/parser';
 import type { DuplicateFlag } from '../lib/parser';
 import type { ParsedQuestion, QuizSet } from '../types';
 import { Upload, Check, AlertCircle, Eye, Loader2, FileText, Sparkles, Plus, MessageSquarePlus, Copy, AlertTriangle } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import QuestionText from '../components/QuestionText';
+import { appendQuestions, createQuizSet, getQuizSetDoc } from '../lib/blobApi';
 
 const SAMPLE_TEXT = `1. What is the capital of France?
 A) London
@@ -52,17 +52,15 @@ export default function ImportPage() {
 
   useEffect(() => {
     if (setId) {
-      supabase.from('quiz_sets').select('*').eq('id', setId).single().then(({ data }) => {
-        if (data) {
-          setExistingSet(data);
-          setTitle(data.title);
-          setDescription(data.description || '');
+      getQuizSetDoc(setId).then((data) => {
+        if (data.quizSet) {
+          setExistingSet(data.quizSet);
+          setTitle(data.quizSet.title);
+          setDescription(data.quizSet.description || '');
         }
-      });
-      supabase.from('questions').select('question_text').eq('quiz_set_id', setId).then(({ data }) => {
-        if (data) {
-          setExistingTexts(data.map(q => q.question_text));
-        }
+        setExistingTexts(data.questions.map((q) => q.question_text));
+      }).catch((e) => {
+        console.error(e);
       });
     }
   }, [setId]);
@@ -128,32 +126,20 @@ export default function ImportPage() {
     let targetSetId = setId;
 
     if (!isAddMode) {
-      const { data: quizSet, error: createErr } = await supabase
-        .from('quiz_sets')
-        .insert({ title: title.trim(), description: description.trim() || null })
-        .select()
-        .single();
-
-      if (createErr || !quizSet) {
-        setError(t('import_err_create') + (createErr?.message || 'Unknown error'));
+      try {
+        const quizSet = await createQuizSet({ title: title.trim(), description: description.trim() || null });
+        targetSetId = quizSet.id;
+      } catch (e) {
+        setError(t('import_err_create') + (e instanceof Error ? e.message : 'Unknown error'));
         setSaving(false);
         return;
       }
-      targetSetId = quizSet.id;
     }
 
-    const questions = parsed.map(q => ({
-      quiz_set_id: targetSetId!,
-      question_text: q.question_text,
-      options: q.options,
-      correct_index: q.correct_index,
-      explanation: q.explanation || null,
-    }));
-
-    const { error: qError } = await supabase.from('questions').insert(questions);
-
-    if (qError) {
-      setError(t('import_err_save') + qError.message);
+    try {
+      await appendQuestions(targetSetId!, parsed);
+    } catch (e) {
+      setError(t('import_err_save') + (e instanceof Error ? e.message : 'Unknown error'));
       setSaving(false);
       return;
     }
