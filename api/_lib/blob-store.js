@@ -12,37 +12,50 @@ function nowIso() {
 }
 
 async function readJson(pathname, fallback) {
-  if (USE_LOCAL_STORE) {
-    const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
-    try {
-      const content = await readFile(absolutePath, 'utf8');
-      return JSON.parse(content);
-    } catch {
-      return fallback;
-    }
-  }
+  if (USE_LOCAL_STORE) return readLocalJson(pathname, fallback);
 
-  const result = await get(pathname, { access: 'public' });
-  if (!result || !result.url) return fallback;
-  const response = await fetch(result.url);
-  if (!response.ok) return fallback;
-  return response.json();
+  try {
+    const result = await get(pathname, { access: 'public' });
+    if (!result || !result.url) return fallback;
+    const response = await fetch(result.url);
+    if (!response.ok) return fallback;
+    return response.json();
+  } catch (error) {
+    console.warn('[blob-store] read failed, falling back to local store:', error);
+    return readLocalJson(pathname, fallback);
+  }
 }
 
 async function writeJson(pathname, value) {
-  if (USE_LOCAL_STORE) {
-    const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
-    await mkdir(nodePath.dirname(absolutePath), { recursive: true });
-    await writeFile(absolutePath, JSON.stringify(value, null, 2), 'utf8');
-    return;
-  }
+  if (USE_LOCAL_STORE) return writeLocalJson(pathname, value);
 
-  await put(pathname, JSON.stringify(value), {
-    access: 'public',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json; charset=utf-8',
-  });
+  try {
+    await put(pathname, JSON.stringify(value), {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json; charset=utf-8',
+    });
+  } catch (error) {
+    console.warn('[blob-store] write failed, falling back to local store:', error);
+    await writeLocalJson(pathname, value);
+  }
+}
+
+async function readLocalJson(pathname, fallback) {
+  const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
+  try {
+    const content = await readFile(absolutePath, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeLocalJson(pathname, value) {
+  const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
+  await mkdir(nodePath.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, JSON.stringify(value, null, 2), 'utf8');
 }
 
 export async function getIndex() {
@@ -91,14 +104,22 @@ export async function saveSetDocument(setId, doc) {
 export async function deleteSetDocument(setId) {
   const pathname = setPath(setId);
   if (USE_LOCAL_STORE) {
-    const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
-    await rm(absolutePath, { force: true });
-    return;
+    return deleteLocalDocument(pathname);
   }
 
-  const blobs = await list({ prefix: pathname, limit: 10 });
-  const targets = blobs.blobs.map((blob) => blob.pathname);
-  if (targets.length > 0) {
-    await del(targets);
+  try {
+    const blobs = await list({ prefix: pathname, limit: 10 });
+    const targets = blobs.blobs.map((blob) => blob.pathname);
+    if (targets.length > 0) {
+      await del(targets);
+    }
+  } catch (error) {
+    console.warn('[blob-store] delete failed, falling back to local store:', error);
+    await deleteLocalDocument(pathname);
   }
+}
+
+async function deleteLocalDocument(pathname) {
+  const absolutePath = nodePath.join(LOCAL_STORE_ROOT, pathname);
+  await rm(absolutePath, { force: true });
 }
