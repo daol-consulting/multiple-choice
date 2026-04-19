@@ -23,9 +23,20 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  const body = await res.json();
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  const body = isJson ? await res.json() : await res.text();
+
   if (!res.ok) {
-    throw new Error(body?.error || 'Request failed.');
+    if (isJson && body && typeof body === 'object' && 'error' in body) {
+      throw new Error(String(body.error || 'Request failed.'));
+    }
+    throw new Error(
+      `Request failed (${res.status}). API 서버가 실행 중인지 확인해 주세요. (${url})`,
+    );
+  }
+  if (!isJson) {
+    throw new Error(`Unexpected response format from API: ${url}`);
   }
   return body as T;
 }
